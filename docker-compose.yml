@@ -1,30 +1,24 @@
-version: '3.8'
-
 services:
   app:
-    # 👇 On utilise VOTRE image construite localement
     image: n2f:v1.0.0
     container_name: n2f-app
     restart: always
     environment:
-      # Connexion à la base de données (db est le nom du service ci-dessous)
       - PGHOST=db
       - PGPORT=5432
       - PGUSER=sbsoft2026
       - PGPASSWORD=sbsoft2026
       - PGDATABASE=sbsoft2026
-      # Configuration Axelor
       - JAVA_XMX=4096m
       - APP_MODE=prod
       - APP_LANGUAGE=fr
       - APP_DEMO_DATA=false
-      #- ENCRYPTION_PASSWORD=VotreCleSecretePourLesPiecesJointes # Obligatoire pour Axelor 8+ openssl rand -base64 32
+      # Décommentez et mettez une vraie clé générée avec `openssl rand -base64 32` pour la production
+      # - ENCRYPTION_PASSWORD=VotreCleSecreteGeneree
     ports:
       - "8080:8080"
     volumes:
-      # 👇 On monte /mnt/data de votre serveur vers /data dans le conteneur
       - /mnt/data/axelor-data:/data
-      # 👇 (Optionnel) Si vous voulez injecter le script meta-restore
       - ./post-startup.d:/usr/local/bin/post-startup.d:ro
     depends_on:
       db:
@@ -34,7 +28,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 600s # Axelor met souvent du temps à démarrer la première fois
+      start_period: 600s
 
   db:
     image: postgres:18
@@ -45,8 +39,8 @@ services:
       - POSTGRES_PASSWORD=sbsoft2026
       - POSTGRES_DB=sbsoft2026
     volumes:
-      # 👇 On sauvegarde la base de données sur le disque du serveur Infomaniak
-      - /mnt/data/postgres-data:/var/lib/postgresql/data
+      # 👇 CORRECTION ICI : On monte sur /var/lib/postgresql (sans /data) pour la v18
+      - /mnt/data/postgres-data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U sbsoft2026 -d sbsoft2026"]
       interval: 10s

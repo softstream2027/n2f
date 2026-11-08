@@ -50,6 +50,10 @@ docker images
 sudo mkdir -p /mnt/data/axelor-data /mnt/data/postgres-data
 sudo chown -R 1000:1000 /mnt/data/axelor-data
 
+sudo apt install -y docker-compose-v2
+docker compose up -d
+docker compose logs db
+
 ------------------------------------------------------
 Utilisez-la dans votre Helm values.yaml : 
 image:
