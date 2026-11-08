@@ -47,7 +47,6 @@ ENV USER=axelor
 ENV HOME=/home/${USER}
 
 ENV JAVA_OPTS="-Daxelor.ScriptCacheSize=500 -Daxelor.ScriptCacheExpireTime=10"
-
 ENV CATALINA_OPTS="-server"
 
 # Refresh repositories and install tools needed by the entrypoint
@@ -58,7 +57,7 @@ RUN apt-get update && \
         postgresql-client ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Temurin JDK 11
+# Install Temurin JDK 21 (pour l'exécution)
 ENV JAVA_HOME=/opt/java/openjdk
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 RUN curl -fsSL https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jdk/hotspot/normal/eclipse -o /tmp/jdk.tar.gz && \
@@ -80,11 +79,13 @@ RUN apt-get update && \
     ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && \
     echo "${TZ}" > /etc/timezone
 
+# Création de l'utilisateur
 RUN groupadd -g ${GID} ${USER} && \
     useradd -u ${UID} -g ${USER} -d ${HOME} -m -s /bin/bash ${USER}
 
-RUN mkdir /data
-RUN chown -R ${USER}:${USER} /data
+# 👇 CORRECTION ICI : Création de /data ET du dossier Tomcat, puis attribution des droits à axelor
+RUN mkdir -p /data ${HOME}/tomcat && \
+    chown -R ${USER}:${USER} /data ${HOME}
 
 USER ${USER}
 
