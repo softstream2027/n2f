@@ -5,6 +5,10 @@ https://github.com/axelor/axelor-docker.git
 git clone https://github.com/softstream2027/n2f.git
 cd n2f/
 
+git config --global user.name "softstream2027"
+git config --global user.email "softstream2027@gmail.com"
+ssh -T git@github.com
+
 sudo apt update
 sudo apt install docker.io -y
 sudo usermod -aG docker $USER
