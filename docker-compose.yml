@@ -1,24 +1,54 @@
+version: '3.8'
+
 services:
   app:
-    image: axelor/aos-ce:9.0
+    # 👇 On utilise VOTRE image construite localement
+    image: n2f:v1.0.0
+    container_name: n2f-app
+    restart: always
     environment:
-      - PGHOST=postgres
+      # Connexion à la base de données (db est le nom du service ci-dessous)
+      - PGHOST=db
       - PGPORT=5432
-      - PGUSER=axelor
-      - PGPASSWORD=axelor
-      - PGDATABASE=axelor
+      - PGUSER=sbsoft2026
+      - PGPASSWORD=sbsoft2026
+      - PGDATABASE=sbsoft2026
+      # Configuration Axelor
       - JAVA_XMX=4096m
+      - APP_MODE=prod
+      - APP_LANGUAGE=fr
+      - APP_DEMO_DATA=false
+      #- ENCRYPTION_PASSWORD=VotreCleSecretePourLesPiecesJointes # Obligatoire pour Axelor 8+ openssl rand -base64 32
     ports:
       - "8080:8080"
+    volumes:
+      # 👇 On monte /mnt/data de votre serveur vers /data dans le conteneur
+      - /mnt/data/axelor-data:/data
+      # 👇 (Optionnel) Si vous voulez injecter le script meta-restore
+      - ./post-startup.d:/usr/local/bin/post-startup.d:ro
+    depends_on:
+      db:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 600s # Axelor met souvent du temps à démarrer la première fois
+
+  db:
+    image: postgres:18
+    container_name: n2f-db
+    restart: always
+    environment:
+      - POSTGRES_USER=sbsoft2026
+      - POSTGRES_PASSWORD=sbsoft2026
+      - POSTGRES_DB=sbsoft2026
+    volumes:
+      # 👇 On sauvegarde la base de données sur le disque du serveur Infomaniak
+      - /mnt/data/postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sbsoft2026 -d sbsoft2026"]
       interval: 10s
       timeout: 5s
-      retries: 3
-      start_period: 1800s
-  postgres:
-    image: "postgres:16"
-    environment:
-      - POSTGRES_USER=axelor
-      - POSTGRES_PASSWORD=axelor
-      - POSTGRES_DB=axelor
+      retries: 5
