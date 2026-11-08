@@ -1,11 +1,9 @@
-# n2f
-git clone https://github.com/softstream2027/n2f.git
-cd n2f/
-
-
 #Axelor std v8.4.8:
 https://github.com/axelor/axelor-docker.git
 
+# n2f
+git clone https://github.com/softstream2027/n2f.git
+cd n2f/
 
 sudo apt update
 sudo apt install docker.io -y
