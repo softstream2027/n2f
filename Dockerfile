@@ -40,7 +40,7 @@ FROM debian:trixie-slim AS runner
 ARG UID=1000
 ARG GID=1000
 
-ARG TOMCAT_VERSION=10.1.50
+ARG TOMCAT_VERSION=9.0.113
 ARG BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 
 ENV USER=axelor
