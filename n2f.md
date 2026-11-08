@@ -8,6 +8,11 @@ cd n2f/
 git config --global user.name "softstream2027"
 git config --global user.email "softstream2027@gmail.com"
 ssh -T git@github.com
+ssh-keygen -t ed25519 -C "softstream2027@gmail.com"
+cat ~/.ssh/id_ed25519.pub
+Ajoutez la clé publique (~/.ssh/id_ed25519.pub) sur GitHub : Settings > SSH and GPG keys > New SSH key.
+git remote set-url origin git@github.com:softstream2027/n2f.git
+ssh -T git@github.com
 
 sudo apt update
 sudo apt install docker.io -y

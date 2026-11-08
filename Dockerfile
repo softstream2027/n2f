@@ -21,7 +21,7 @@ RUN for module in $ADDITIONAL_MODULES; do \
     fi; \
     done
 
-FROM eclipse-temurin:21-jdk AS builder
+FROM eclipse-temurin:11-jdk-jammy AS builder
 
 COPY --from=sources /webapp /app
 WORKDIR /app
@@ -58,7 +58,7 @@ RUN apt-get update && \
         postgresql-client ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Temurin JDK 21
+# Install Temurin JDK 11
 ENV JAVA_HOME=/opt/java/openjdk
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 RUN curl -fsSL https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jdk/hotspot/normal/eclipse -o /tmp/jdk.tar.gz && \
