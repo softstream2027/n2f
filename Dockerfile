@@ -40,6 +40,8 @@ FROM debian:trixie-slim AS runner
 ARG UID=1000
 ARG GID=1000
 
+# 👇 Tomcat 10 est OBLIGATOIRE pour Axelor 8 (Jakarta EE)
+#ARG TOMCAT_VERSION=10.1.50
 ARG TOMCAT_VERSION=9.0.113
 ARG BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 
@@ -57,10 +59,11 @@ RUN apt-get update && \
         postgresql-client ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Temurin JDK 21 (pour l'exécution)
+# 👇 CORRECTION : Téléchargement direct de JDK 11 depuis GitHub (contourne l'API Adoptium)
 ENV JAVA_HOME=/opt/java/openjdk
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
-RUN curl -fsSL https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jdk/hotspot/normal/eclipse -o /tmp/jdk.tar.gz && \
+RUN curl -fsSL -o /tmp/jdk.tar.gz \
+    "https://github.com/adoptium/temurin11-binaries/releases/download/jdk-11.0.23%2B9/OpenJDK11U-jdk_x64_linux_hotspot_11.0.23_9.tar.gz" && \
     mkdir -p ${JAVA_HOME} && \
     tar -xzf /tmp/jdk.tar.gz -C ${JAVA_HOME} --strip-components=1 && \
     rm /tmp/jdk.tar.gz
@@ -83,7 +86,7 @@ RUN apt-get update && \
 RUN groupadd -g ${GID} ${USER} && \
     useradd -u ${UID} -g ${USER} -d ${HOME} -m -s /bin/bash ${USER}
 
-# 👇 CORRECTION ICI : Création de /data ET du dossier Tomcat, puis attribution des droits à axelor
+# Création de /data ET du dossier Tomcat avec les bons droits
 RUN mkdir -p /data ${HOME}/tomcat && \
     chown -R ${USER}:${USER} /data ${HOME}
 
