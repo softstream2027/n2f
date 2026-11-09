@@ -70,6 +70,18 @@ df -h /
 
 cd /mnt/data/n2f
 
+Fichier .env (dans /mnt/data/n2f/)
+cd /mnt/data/n2f
+cat > .env <<EOF
+DB_USER=sbsoft2026
+DB_NAME=sbsoft2026
+DB_PASSWORD=sbsoft2026
+JAVA_XMX=4096m
+EOF
+chmod 600 .env
+echo ".env" >> .gitignore
+
+
 # Build v8.4.8 version
 #docker build   --build-arg AOS_VERSION=v8.4.8   -t axelor/aos-ce:v8.4.8 .
 docker build --build-arg AOS_VERSION=v8.4.8 -t n2f:v1.0.0 .
@@ -99,6 +111,115 @@ docker compose logs -f
 docker buildx build --build-arg AOS_VERSION=v8.4.8 -t n2f:v1.0.0 --load .
 docker compose up -d --force-recreate app
 docker exec n2f-app /home/axelor/tomcat/bin/version.sh | head -3
+------------------------------------------------------
+2. Installer Nginx et Certbot
+sudo apt install -y nginx certbot python3-certbot-nginx
+3. Créer la configuration du site
+sudo tee /etc/nginx/sites-available/n2f >/dev/null <<'EOF'
+server {
+    listen 80;
+    server_name taysirflow.duckdns.org;
+
+    client_max_body_size 100m;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+    }
+}
+EOF
+
+sudo ln -s /etc/nginx/sites-available/n2f /etc/nginx/sites-enabled/n2f
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t && sudo systemctl reload nginx
+4. Ouvrir les ports chez Infomaniak
+
+Dans le pare-feu du panneau Infomaniak, autorisez TCP 80 et 443 en entrée. Sans cela, Let’s Encrypt ne peut pas valider le domaine. Si ufw est actif : sudo ufw allow 80,443/tcp.
+5. Obtenir le certificat HTTPS
+sudo certbot --nginx -d taysirflow.duckdns.org --redirect
+softstream2027@gmail.com
+6. Vérifier Depuis votre PC :
+curl -I https://taysirflow.duckdns.org
+
+2. Vérifier le renouvellement automatique du certificat
+sudo certbot renew --dry-run
+systemctl list-timers | grep certbot
+3. Sécuriser Axelor
+
+Changez le mot de passe admin (et ceux des comptes par défaut) dès maintenant.
+Si des liens ou redirections partent en http://, réglez application.base.url=https://taysirflow.duckdns.org.
+
+4. Sécurité générale
+
+Régénérez le token DuckDNS, visible sur votre capture d’écran.
+Limitez SSH (port 22) à votre IP dans le pare-feu Infomaniak si possible.
+Gardez ouverts uniquement 22, 80 et 443.
+
+5. Robustesse après redémarrage
+
+Vérifiez que /mnt/data est monté automatiquement (/etc/fstab), car Docker et containerd y sont maintenant.
+Vérifiez que les services démarrent au boot : 
+systemctl is-enabled docker containerd nginx
+Vos conteneurs doivent avoir restart: unless-stopped dans le compose.
+6. Sauvegardes de la base
+docker exec n2f-db pg_dump -U <user> <db> | gzip > /mnt/data/backup-$(date +%F).sql.gz
+Vous pouvez la planifier avec crontab -e, par exemple chaque nuit à 2h. Pensez aussi à copier ces sauvegardes hors du serveur.
+
+cd /mnt/data/n2f
+mkdir -p /mnt/data/backups
+cat > backup.sh <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+COMPOSE_DIR=/mnt/data/n2f
+BACKUP_DIR=/mnt/data/backups
+RETENTION_DAYS=7
+STAMP=$(date +%F_%H%M)
+
+DB_USER=$(grep '^DB_USER=' "$COMPOSE_DIR/.env" | cut -d= -f2-)
+DB_NAME=$(grep '^DB_NAME=' "$COMPOSE_DIR/.env" | cut -d= -f2-)
+
+mkdir -p "$BACKUP_DIR"
+echo "[$(date '+%F %T')] Début de la sauvegarde"
+
+# 1. Base de données (format custom, compressé, restaurable avec pg_restore)
+DB_FILE="$BACKUP_DIR/db_${DB_NAME}_${STAMP}.dump"
+docker exec n2f-db pg_dump -U "$DB_USER" -d "$DB_NAME" -Fc > "$DB_FILE.tmp"
+
+# Vérification : le dump doit être lisible
+docker exec -i n2f-db pg_restore -l < "$DB_FILE.tmp" > /dev/null
+mv "$DB_FILE.tmp" "$DB_FILE"
+
+# 2. Fichiers Axelor (pièces jointes, etc.)
+FILES_FILE="$BACKUP_DIR/files_${STAMP}.tar.gz"
+tar czf "$FILES_FILE.tmp" -C /mnt/data axelor-data
+mv "$FILES_FILE.tmp" "$FILES_FILE"
+
+# 3. Rotation
+find "$BACKUP_DIR" -type f \( -name 'db_*.dump' -o -name 'files_*.tar.gz' \) -mtime +"$RETENTION_DAYS" -delete
+
+echo "[$(date '+%F %T')] OK : $(basename "$DB_FILE") ($(du -h "$DB_FILE" | cut -f1)), $(basename "$FILES_FILE") ($(du -h "$FILES_FILE" | cut -f1))"
+EOF
+chmod 700 backup.sh
+2. Tester une fois à la main
+./backup.sh
+ls -lh /mnt/data/backups
+3. Planifier chaque nuit à 2h
+crontab -e
+0 2 * * * /mnt/data/n2f/backup.sh >> /mnt/data/backups/backup.log 2>&1
+Restauration
+cd /mnt/data/n2f
+docker compose stop app
+docker exec -i n2f-db pg_restore -U sbsoft2026 -d sbsoft2026 --clean --if-exists --no-owner < /mnt/data/backups/db_sbsoft2026_2026-11-09_0938.dump
+docker compose start app
+Pour les fichiers :
+sudo tar xzf /mnt/data/backups/files_2026-11-09_0938.tar.gz -C /mnt/data
+
 ------------------------------------------------------
 
 Utilisez-la dans votre Helm values.yaml : 

@@ -2,21 +2,22 @@ services:
   app:
     image: n2f:v1.0.0
     container_name: n2f-app
-    restart: always
+    restart: unless-stopped
+    init: true
+    stop_grace_period: 60s
     environment:
-      - PGHOST=db
-      - PGPORT=5432
-      - PGUSER=sbsoft2026
-      - PGPASSWORD=sbsoft2026
-      - PGDATABASE=sbsoft2026
-      - JAVA_XMX=4096m
-      - APP_MODE=prod
-      - APP_LANGUAGE=fr
-      - APP_DEMO_DATA=false
-      # Décommentez et mettez une vraie clé générée avec `openssl rand -base64 32` pour la production
-      # - ENCRYPTION_PASSWORD=VotreCleSecreteGeneree
+      PGHOST: db
+      PGPORT: "5432"
+      PGUSER: ${DB_USER}
+      PGPASSWORD: ${DB_PASSWORD}
+      PGDATABASE: ${DB_NAME}
+      JAVA_XMX: ${JAVA_XMX:-4096m}
+      APP_MODE: prod
+      APP_LANGUAGE: fr
+      APP_DEMO_DATA: "false"
+      #ENCRYPTION_PASSWORD: ${ENCRYPTION_PASSWORD}
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     volumes:
       - /mnt/data/axelor-data:/data
       - ./post-startup.d:/usr/local/bin/post-startup.d:ro
@@ -24,25 +25,50 @@ services:
       db:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      test: ["CMD", "curl", "-fs", "http://localhost:8080/health"]
       interval: 30s
       timeout: 10s
       retries: 5
       start_period: 600s
+    mem_limit: 6g
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    networks:
+      - backend
 
   db:
     image: postgres:18
     container_name: n2f-db
-    restart: always
+    restart: unless-stopped
+    stop_grace_period: 60s
     environment:
-      - POSTGRES_USER=sbsoft2026
-      - POSTGRES_PASSWORD=sbsoft2026
-      - POSTGRES_DB=sbsoft2026
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     volumes:
-      # 👇 CORRECTION ICI : On monte sur /var/lib/postgresql (sans /data) pour la v18
+      # PostgreSQL 18 : monter sur /var/lib/postgresql (sans /data)
       - /mnt/data/postgres-data:/var/lib/postgresql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sbsoft2026 -d sbsoft2026"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 10s
       timeout: 5s
       retries: 5
+    shm_size: 256m
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: bridge
