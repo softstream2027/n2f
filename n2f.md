@@ -84,16 +84,15 @@ sudo mkdir -p /mnt/data/axelor-data /mnt/data/postgres-data
 sudo chown -R 1000:1000 /mnt/data/axelor-data
 
 sudo apt install -y docker-compose-v2
-docker compose up -d
-docker compose logs db
-
-
 docker compose down
 sudo rm -rf /mnt/data/postgres-data/*
 sudo chown -R 999:999 /mnt/data/postgres-data
+
 docker compose up -d
-docker compose logs -f
+
 docker compose logs -f app
+docker compose logs db
+docker compose logs -f
 ------------------------------------------------------
 Utilisez-la dans votre Helm values.yaml : 
 image:
