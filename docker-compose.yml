@@ -22,6 +22,7 @@ services:
       APP_MODE: prod
       APP_LANGUAGE: fr
       APP_DEMO_DATA: "false"
+      APP_LOAD_APPS: ${APP_LOAD_APPS:-}
       # ENCRYPTION_PASSWORD: ${ENCRYPTION_PASSWORD}
     ports:
       - "127.0.0.1:8080:8080"
