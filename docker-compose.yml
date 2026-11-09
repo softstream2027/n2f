@@ -1,4 +1,11 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
 services:
+  # ───────────── AXELOR ─────────────
   app:
     image: n2f:v1.0.0
     container_name: n2f-app
@@ -15,7 +22,7 @@ services:
       APP_MODE: prod
       APP_LANGUAGE: fr
       APP_DEMO_DATA: "false"
-      #ENCRYPTION_PASSWORD: ${ENCRYPTION_PASSWORD}
+      # ENCRYPTION_PASSWORD: ${ENCRYPTION_PASSWORD}
     ports:
       - "127.0.0.1:8080:8080"
     volumes:
@@ -33,13 +40,9 @@ services:
     mem_limit: 6g
     security_opt:
       - no-new-privileges:true
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "5"
+    logging: *default-logging
     networks:
-      - backend
+      - axelor-net
 
   db:
     image: postgres:18
@@ -61,14 +64,90 @@ services:
     shm_size: 256m
     security_opt:
       - no-new-privileges:true
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "5"
+    logging: *default-logging
     networks:
+      - axelor-net
+
+  # ───────────── SAAS ─────────────
+  saas-db:
+    image: postgres:17-alpine
+    container_name: saas-db
+    restart: unless-stopped
+    stop_grace_period: 60s
+    environment:
+      POSTGRES_USER: ${SAAS_DB_USER}
+      POSTGRES_PASSWORD: ${SAAS_DB_PASSWORD}
+      POSTGRES_DB: ${SAAS_DB_NAME}
+    volumes:
+      - /mnt/data/saas-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${SAAS_DB_USER} -d ${SAAS_DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+    networks:
+      - saas-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: saas-redis
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - /mnt/data/redis-data:/data
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+    networks:
+      - saas-net
+
+  backend:
+    image: bassembenabbes/softstream-saas-backend:latest   # à figer sur un tag précis
+    container_name: saas-backend
+    restart: unless-stopped
+    depends_on:
+      saas-db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    env_file:
+      - .env.saas
+    environment:
+      DATABASE_URL: postgresql://${SAAS_DB_USER}:${SAAS_DB_PASSWORD}@saas-db:5432/${SAAS_DB_NAME}?schema=public
+      REDIS_URL: redis://redis:6379
+      AXELOR_BASE_URL: http://app:8080
+    ports:
+      - "127.0.0.1:4000:4000"
+    mem_limit: 1g
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+    networks:
+      - saas-net
+      - axelor-net
+
+  frontend:
+    image: bassembenabbes/softstream-saas-frontend:latest  # à figer sur un tag précis
+    container_name: saas-frontend
+    restart: unless-stopped
+    depends_on:
       - backend
+    env_file:
+      - .env.saas
+    ports:
+      - "127.0.0.1:3000:3000"
+    mem_limit: 1g
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
+    networks:
+      - saas-net
 
 networks:
-  backend:
+  axelor-net:
+    driver: bridge
+  saas-net:
     driver: bridge

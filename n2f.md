@@ -77,9 +77,37 @@ DB_USER=sbsoft2026
 DB_NAME=sbsoft2026
 DB_PASSWORD=sbsoft2026
 JAVA_XMX=4096m
+SAAS_DB_USER=saas
+SAAS_DB_NAME=saas
+SAAS_DB_PASSWORD=saas
 EOF
 chmod 600 .env
 echo ".env" >> .gitignore
+--------------------------------
+.env.saas (toutes les autres variables du SaaS) :
+cat > .env.saas <<'EOF'
+FRONTEND_URL=https://saas-taysirflow.duckdns.org
+NEXT_PUBLIC_API_URL=https://api-taysirflow.duckdns.org
+NEXT_PUBLIC_AXELOR_URL=https://taysirflow.duckdns.org
+APP_SECRET_KEY=A_GENERER
+STRIPE_SECRET_KEY=
+STRIPE_WEBHOOK_SECRET=
+NEXT_PUBLIC_STRIPE_PUBLIC_KEY=
+STRIPE_PRICE_STARTER=
+STRIPE_PRICE_BUSINESS=
+STRIPE_PRICE_PRODUCTION=
+AXELOR_USERNAME=
+AXELOR_PASSWORD=
+AXELOR_CLIENT_GROUP_CODE=
+SMTP_HOST=
+SMTP_PORT=
+SMTP_USER=
+SMTP_PASS=
+MAIL_FROM=
+EOF
+sed -i "s|A_GENERER|$(openssl rand -hex 32)|" .env.saas
+chmod 600 .env .env.saas
+printf ".env\n.env.saas\n" >> .gitignore
 
 
 # Build v8.4.8 version
@@ -136,6 +164,44 @@ EOF
 sudo ln -s /etc/nginx/sites-available/n2f /etc/nginx/sites-enabled/n2f
 sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t && sudo systemctl reload nginx
+---------------------------------------------------------------------------
+sudo tee /etc/nginx/sites-available/saas >/dev/null <<'EOF'
+server {
+    listen 80;
+    server_name saas-taysirflow.duckdns.org;
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+server {
+    listen 80;
+    server_name api-taysirflow.duckdns.org;
+    client_max_body_size 20m;
+    location / {
+        proxy_pass http://127.0.0.1:4000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+EOF
+------
+1. Créer les deux domaines sur duckdns.org
+
+Votre compte est à 1/5, il reste de la place. Dans la case « sub domain » puis « add domain », créez :
+
+saas-taysirflow
+api-taysirflow
+---------------
+sudo ln -s /etc/nginx/sites-available/saas /etc/nginx/sites-enabled/saas
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d saas-taysirflow.duckdns.org -d api-taysirflow.duckdns.org --redirect
+--------------------------------------------------------------------------
 4. Ouvrir les ports chez Infomaniak
 
 Dans le pare-feu du panneau Infomaniak, autorisez TCP 80 et 443 en entrée. Sans cela, Let’s Encrypt ne peut pas valider le domaine. Si ufw est actif : sudo ufw allow 80,443/tcp.
