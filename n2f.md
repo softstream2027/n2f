@@ -289,7 +289,9 @@ sudo tar xzf /mnt/data/backups/files_2026-11-09_0938.tar.gz -C /mnt/data
 1. Corriger les variables dans GitLab
 https://gitlab.com/k8s-axelor/softstream-saas/-/settings/ci_cd#js-cicd-variables-settings
 NEXT_PUBLIC_API_URL=https://api-taysirflow.duckdns.org et non pas https://softstream.taysirflow.duckdns.org
-
+et alors modifier le url webhooks dans stripe:
+1. Corriger l’URL dans Stripe Cliquez sur Modifier la destination et remplacez l’URL par :
+https://api-taysirflow.duckdns.org/api/webhooks/stripe
 ------------------------------------------------------
 
 Utilisez-la dans votre Helm values.yaml : 
