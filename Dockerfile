@@ -82,9 +82,11 @@ RUN set -eux; \
 USER ${USER}
 WORKDIR ${CATALINA_HOME}
 
-# Installation de Tomcat 10 (Obligatoire pour Axelor 8+)
+# Installation de Tomcat 9 (javax.servlet, requis par Axelor Open Platform 7.x / AOS 8.4)
 RUN set -eux; \
-    curl -fsSL "https://archive.apache.org/dist/tomcat/tomcat-10/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz" | tar xz --strip-components=1 -C ${CATALINA_HOME}; \
+    TOMCAT_MAJOR="${TOMCAT_VERSION%%.*}"; \
+    curl -fsSL "https://archive.apache.org/dist/tomcat/tomcat-${TOMCAT_MAJOR}/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz" \
+      | tar xz --strip-components=1 -C ${CATALINA_HOME}; \
     rm -rf webapps/* temp/* work/* logs/*
 
 # Optimisation de Tomcat (HealthCheck, logs)

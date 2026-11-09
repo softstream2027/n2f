@@ -78,6 +78,8 @@ docker build --no-cache \
   --build-arg AOS_VERSION=v8.4.8 \
   -t n2f:v1.0.0 .
 
+  # docker buildx build --no-cache --build-arg AOS_VERSION=v8.4.8 -t n2f:v1.0.0 --load .
+
 docker images
 
 sudo mkdir -p /mnt/data/axelor-data /mnt/data/postgres-data
@@ -94,6 +96,11 @@ docker compose logs -f app
 docker compose logs db
 docker compose logs -f
 ------------------------------------------------------
+docker buildx build --build-arg AOS_VERSION=v8.4.8 -t n2f:v1.0.0 --load .
+docker compose up -d --force-recreate app
+docker exec n2f-app /home/axelor/tomcat/bin/version.sh | head -3
+------------------------------------------------------
+
 Utilisez-la dans votre Helm values.yaml : 
 image:
   repository: n2f
