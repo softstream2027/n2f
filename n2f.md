@@ -136,7 +136,8 @@ docker compose up -d
 docker compose logs -f app
 docker compose logs db
 docker compose logs -f
-------------------------------------------------------
+
+-------------------------en cas de souci-----------------------------
 docker buildx build --build-arg AOS_VERSION=v8.4.8 -t n2f:v1.0.0 --load .
 docker compose up -d --force-recreate app
 docker exec n2f-app /home/axelor/tomcat/bin/version.sh | head -3
@@ -192,6 +193,85 @@ server {
 }
 EOF
 ------
+ou bien
+sudo nano /etc/nginx/sites-available/n2f
+server {
+    listen 80;
+    server_name taysirflow.duckdns.org;
+
+    client_max_body_size 100m;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Timeout long pour Axelor (qui peut mettre du temps à générer des rapports)
+        proxy_read_timeout 300s;
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
+    }
+}
+sudo nano /etc/nginx/sites-available/saas
+# --- FRONTEND NEXT.JS ---
+server {
+    listen 80;
+    server_name saas-taysirflow.duckdns.org;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # 👇 CRUCIAL POUR NEXT.JS (WebSockets / Hot Reload)
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+
+# --- BACKEND NESTJS (API) ---
+server {
+    listen 80;
+    server_name api-taysirflow.duckdns.org;
+
+    client_max_body_size 20m;
+
+    location / {
+        proxy_pass http://127.0.0.1:4000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # 👇 CRUCIAL POUR NESTJS (WebSockets)
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+# Activer les sites
+sudo ln -s /etc/nginx/sites-available/n2f /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/saas /etc/nginx/sites-enabled/
+
+# Supprimer le site par défaut (pour éviter les conflits)
+sudo rm -f /etc/nginx/sites-enabled/default
+
+# Tester la syntaxe
+sudo nginx -t
+
+# Recharger Nginx
+sudo systemctl reload nginx
+
+# Certificat pour Axelor
+sudo certbot --nginx -d taysirflow.duckdns.org --redirect
+
+# Certificat pour le SaaS (Front + API d'un coup)
+sudo certbot --nginx -d saas-taysirflow.duckdns.org -d api-taysirflow.duckdns.org --redirect
+
+-------------------
 1. Créer les deux domaines sur duckdns.org
 
 Votre compte est à 1/5, il reste de la place. Dans la case « sub domain » puis « add domain », créez :
@@ -279,6 +359,7 @@ ls -lh /mnt/data/backups
 3. Planifier chaque nuit à 2h
 crontab -e
 0 2 * * * /mnt/data/n2f/backup.sh >> /mnt/data/backups/backup.log 2>&1
+--------------------------------------
 Restauration
 cd /mnt/data/n2f
 docker compose stop app
