@@ -286,6 +286,10 @@ docker compose start app
 Pour les fichiers :
 sudo tar xzf /mnt/data/backups/files_2026-11-09_0938.tar.gz -C /mnt/data
 
+1. Corriger les variables dans GitLab
+https://gitlab.com/k8s-axelor/softstream-saas/-/settings/ci_cd#js-cicd-variables-settings
+NEXT_PUBLIC_API_URL=https://api-taysirflow.duckdns.org et non pas https://softstream.taysirflow.duckdns.org
+
 ------------------------------------------------------
 
 Utilisez-la dans votre Helm values.yaml : 
