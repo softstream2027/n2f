@@ -26,21 +26,24 @@ FROM eclipse-temurin:11-jdk-jammy AS builder
 COPY --from=sources /webapp /app
 WORKDIR /app
 
+# 👇 CORRECTION GRADLE : On installe wget, on télécharge Gradle manuellement et on l'utilise
 RUN DEBIAN_FRONTEND=noninteractive apt-get update && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends unzip && \
-    ./gradlew --no-daemon -xtest -xcheck -xspotlessApply build && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends unzip wget && \
+    wget -q https://services.gradle.org/distributions/gradle-8.11.1-bin.zip -O /tmp/gradle.zip && \
+    unzip -q /tmp/gradle.zip -d /opt && \
+    /opt/gradle-8.11.1/bin/gradle --no-daemon -xtest -xcheck -xspotlessApply build && \
     mkdir -p /app/webapps/ROOT && \
     unzip -q -o /app/build/libs/*.war -d /app/webapps/ROOT/ && \
     mkdir -p /app/reports && \
     if ls /app/build/libs/*-reports.zip 1> /dev/null 2>&1; then unzip -q -o /app/build/libs/*-reports.zip -d /app/reports/; fi && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* /tmp/gradle.zip
 
 FROM debian:trixie-slim AS runner
 
 ARG UID=1000
 ARG GID=1000
 
-# 👇 Tomcat 10 est OBLIGATOIRE pour Axelor 8 (Jakarta EE)
+# 👇 CORRECTION TOMCAT : On remet Tomcat 10 (OBLIGATOIRE pour Axelor 8)
 #ARG TOMCAT_VERSION=10.1.50
 ARG TOMCAT_VERSION=9.0.113
 ARG BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
@@ -51,7 +54,6 @@ ENV HOME=/home/${USER}
 ENV JAVA_OPTS="-Daxelor.ScriptCacheSize=500 -Daxelor.ScriptCacheExpireTime=10"
 ENV CATALINA_OPTS="-server"
 
-# Refresh repositories and install tools needed by the entrypoint
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         htop vim bash bash-completion curl coreutils \
@@ -59,7 +61,7 @@ RUN apt-get update && \
         postgresql-client ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-# 👇 CORRECTION : Téléchargement direct de JDK 11 depuis GitHub (contourne l'API Adoptium)
+# Téléchargement direct de Java 11 depuis GitHub (contourne l'API Adoptium)
 ENV JAVA_HOME=/opt/java/openjdk
 ENV PATH="${JAVA_HOME}/bin:${PATH}"
 RUN curl -fsSL -o /tmp/jdk.tar.gz \
@@ -73,7 +75,6 @@ ENV LANG=en_US.UTF-8
 ENV LANGUAGE=en_US:en
 ENV LC_ALL=en_US.UTF-8
 
-# Set locale and timezone
 RUN apt-get update && \
     apt-get install -y --no-install-recommends locales tzdata && \
     rm -rf /var/lib/apt/lists/* && \
@@ -82,11 +83,9 @@ RUN apt-get update && \
     ln -snf /usr/share/zoneinfo/${TZ} /etc/localtime && \
     echo "${TZ}" > /etc/timezone
 
-# Création de l'utilisateur
 RUN groupadd -g ${GID} ${USER} && \
     useradd -u ${UID} -g ${USER} -d ${HOME} -m -s /bin/bash ${USER}
 
-# Création de /data ET du dossier Tomcat avec les bons droits
 RUN mkdir -p /data ${HOME}/tomcat && \
     chown -R ${USER}:${USER} /data ${HOME}
 
@@ -101,27 +100,20 @@ RUN export TOMCAT_MINOR_VERSION=$(echo ${TOMCAT_VERSION} | cut -d"." -f 1) && \
     mkdir -p ${CATALINA_HOME} && \
     curl -L https://archive.apache.org/dist/tomcat/tomcat-${TOMCAT_MINOR_VERSION}/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz | tar xvzf - --exclude="apache-tomcat*/webapps/*" --strip-components=1 --directory=${CATALINA_HOME}
 
-# Remove default AccessLogValve from server.xml
 RUN sed -i -E ':a;N;$!ba;s/<Valve className=\"org.apache.catalina.valves.AccessLogValve\"(.|\n)*\/>//' ${CATALINA_HOME}/conf/server.xml
 
-# Add HealthCheckValve to server.xml inside <Host> tag at the end
 RUN sed -i -E '/<\/Host>/i <Valve className="org.apache.catalina.valves.HealthCheckValve" />' ${CATALINA_HOME}/conf/server.xml
 
-# Create important directories
 RUN mkdir -p ${CATALINA_HOME}/webapps ${CATALINA_HOME}/reports ${CATALINA_HOME}/scripts
 
-# Expose ports
 EXPOSE 8080
 
-# Copy files
 COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/
 COPY --chmod=755 post-startup.d/* /usr/local/bin/post-startup.d/
 
-# Copy app
 COPY --from=builder --chown=${USER}:${USER} --chmod=700 /app/webapps/ ${CATALINA_HOME}/webapps/
 COPY --from=builder --chown=${USER}:${USER} --chmod=700 /app/reports/ ${CATALINA_HOME}/reports/
 
-# Label images
 LABEL \
     maintainer="Axelor <support@axelor.com>" \
     org.label-schema.schema-version="1.0" \
@@ -129,6 +121,5 @@ LABEL \
     org.label-schema.name="aos-ce" \
     org.label-schema.vendor="Axelor"
 
-# Entrypoint
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["start"]
