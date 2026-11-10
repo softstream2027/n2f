@@ -53,7 +53,7 @@ services:
   # ───────────── AXELOR ─────────────
   app:
     <<: *hardened
-    image: n2f:v1.0.0
+    image: n2f:1.1.0
     container_name: n2f-app
     # tini est déjà PID 1 dans l'image : pas de "init: true"
     stop_grace_period: 60s
