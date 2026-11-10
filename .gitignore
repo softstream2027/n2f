@@ -1,6 +1,6 @@
 volumes
 certs
-
+.env
 *.war
 *.properties
 
