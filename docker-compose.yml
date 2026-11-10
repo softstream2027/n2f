@@ -66,7 +66,13 @@ services:
       JAVA_XMX: ${JAVA_XMX:-4096m}
       APP_MODE: prod
       APP_LANGUAGE: fr
-      APP_BASE_URL: https://${AXELOR_DOMAIN}
+      #APP_BASE_URL: https://${AXELOR_DOMAIN}
+      # L'entrypoint met DEBUG par défaut : trop verbeux en production
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      # Réglages via variables AXELOR_CONFIG_<clé> (documentées par Axelor, prioritaires sur le fichier).
+      # L'entrypoint gère déjà db.default.ddl=update, data.upload.dir, data.export.dir, etc.
+      AXELOR_CONFIG_APPLICATION_BASE_URL: https://${AXELOR_DOMAIN}
+      AXELOR_CONFIG_SESSION_TIMEOUT: "60"
       APP_DEMO_DATA: ${APP_DEMO_DATA:-false}
       APP_LOAD_APPS: ${APP_LOAD_APPS:-}
       ADDITIONAL_PROPERTIES: ${ADDITIONAL_PROPERTIES}

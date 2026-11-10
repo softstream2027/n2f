@@ -151,17 +151,20 @@ RUN set -eux; \
     rm -f /tmp/tomcat.tar.gz; \
     rm -rf webapps/* temp/* work/* logs/*
 
-# Configuration Tomcat derriere un reverse proxy TLS (Caddy), selon le guide Axelor :
-#  - connecteur HTTP avec scheme=https / secure=true / proxyPort=443
+# Configuration Tomcat derriere un reverse proxy TLS (Nginx/Caddy) :
+#  - RemoteIpValve : le schema https n'est retenu que pour les requetes qui arrivent
+#    avec X-Forwarded-Proto: https. Les appels internes en HTTP (ex. backend SaaS ->
+#    http://app:8080) restent en HTTP et ne recoivent pas de cookie "Secure" inutilisable.
 #  - port d'arret desactive, pas de version ni de stack trace dans les pages d'erreur
 #  - endpoint /health (HealthCheckValve)
 RUN set -eux; \
     sed -i '/<Valve className="org.apache.catalina.valves.AccessLogValve"/,/\/>/d' conf/server.xml; \
-    sed -i '/<Connector port="8080"/,/\/>/c\    <Connector port="8080" protocol="HTTP/1.1" proxyPort="443" scheme="https" secure="true" connectionTimeout="20000" redirectPort="8443" maxParameterCount="1000" />' conf/server.xml; \
+    sed -i '/<Connector port="8080"/,/\/>/c\    <Connector port="8080" protocol="HTTP/1.1" connectionTimeout="20000" redirectPort="8443" maxParameterCount="1000" />' conf/server.xml; \
     sed -i 's/<Server port="8005"/<Server port="-1"/' conf/server.xml; \
     sed -i '/<\/Host>/i <Valve className="org.apache.catalina.valves.HealthCheckValve" />' conf/server.xml; \
     sed -i '/<\/Host>/i <Valve className="org.apache.catalina.valves.ErrorReportValve" showReport="false" showServerInfo="false" />' conf/server.xml; \
-    grep -q 'proxyPort="443"' conf/server.xml; \
+    sed -i '/<\/Host>/i <Valve className="org.apache.catalina.valves.RemoteIpValve" />' conf/server.xml; \
+    grep -q 'RemoteIpValve' conf/server.xml; \
     grep -q 'HealthCheckValve' conf/server.xml; \
     mkdir -p "${CATALINA_HOME}/webapps" "${CATALINA_HOME}/reports" "${CATALINA_HOME}/scripts"
 
