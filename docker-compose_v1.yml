@@ -7,7 +7,7 @@ x-logging: &default-logging
 services:
   # ───────────── AXELOR ─────────────
   app:
-    image: n2f:v1.1.0
+    image: n2f:1.1.0
     container_name: n2f-app
     restart: unless-stopped
     init: true
