@@ -122,7 +122,13 @@ docker compose logs -f
 
 activer email smtp dasn axelor : Compte par défaut Compte par défaut ssl
 importer les roles dans gestion des appllications
+
+https://taysirflow.duckdns.org/#/ds/admin.root.templating.template/edit/3
+Dans le champ "Valeur Expr." de cette fenêtre, remplacez tout le texte par ceci :
+eval: com.axelor.utils.helpers.StringHelper.escapeHtml(transientPassword)
+
 ajouter le role Expense User et role mobile base et mobile hr  et Timesheet Read:  a la group HRM
+
 ajpter la permission perm.base.Product.rwcde au role Expense User
 aussi perm.auth.my,perm.base.company.r
 
