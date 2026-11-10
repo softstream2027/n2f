@@ -19,3 +19,6 @@ certs
 .env
 .env.saas
 *.bak*
+.env
+.env
+.env.saas
