@@ -120,17 +120,18 @@ docker compose logs -f app
 docker compose logs db
 docker compose logs -f
 
-activer email smtp dasn axelor : Compte par défaut Compte par défaut ssl
+activer email smtp dasn axelor : Compte par défaut Compte par défaut ssl smtp.gmail.com
 importer les roles dans gestion des appllications
 
 https://taysirflow.duckdns.org/#/ds/admin.root.templating.template/edit/3
 Dans le champ "Valeur Expr." de cette fenêtre, remplacez tout le texte par ceci :
 eval: com.axelor.utils.helpers.StringHelper.escapeHtml(transientPassword)
+eval: com.axelor.utils.helpers.StringHelper.escapeHtml(__repo__(User).find(id).transientPassword)
 
-ajouter le role Expense User et role mobile base et mobile hr  et Timesheet Read:  a la group HRM
-
-ajpter la permission perm.base.Product.rwcde au role Expense User
-aussi perm.auth.my,perm.base.company.r
+ajouter le role Expense User et role mobile base et mobile hr    a la group HRM
+//et Timesheet Read:
+//ajpter la permission perm.base.Product.rwcde au role Expense User
+//aussi perm.auth.my,perm.base.company.r
 
 
 ------------pas avec nginix on a utiliser caddy:2-------------------
