@@ -6,11 +6,14 @@ ssh-keygen -f "/home/audaxis/.ssh/known_hosts" -R "83.228.244.59"
 ssh -i ~/.ssh/mekkaoui.pem ubuntu@83.228.244.59
 cd /mnt/data
 df -h
+sudo rm -r *
 sudo chown -R ubuntu:ubuntu /mnt/data
 
 # n2f
 git clone https://github.com/softstream2027/n2f.git
 cd n2f/
+ls -la
+
 
 git config --global user.name "softstream2027"
 git config --global user.email "softstream2027@gmail.com"
