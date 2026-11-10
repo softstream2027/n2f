@@ -71,12 +71,14 @@ df -h /
 cd /mnt/data/n2f
 
 Fichier .env (dans /mnt/data/n2f/)
+
 cd /mnt/data/n2f
 cat > .env <<EOF
 DB_USER=sbsoft2026
 DB_NAME=sbsoft2026
 DB_PASSWORD=sbsoft2026
 APP_LOAD_APPS=all
+APP_DEMO_DATA=true
 JAVA_XMX=4096m
 SAAS_DB_USER=saas
 SAAS_DB_NAME=saas
@@ -86,6 +88,7 @@ chmod 600 .env
 echo ".env" >> .gitignore
 --------------------------------
 .env.saas (toutes les autres variables du SaaS) :
+
 cat > .env.saas <<'EOF'
 FRONTEND_URL=https://saas-taysirflow.duckdns.org
 NEXT_PUBLIC_API_URL=https://api-taysirflow.duckdns.org
@@ -106,6 +109,7 @@ SMTP_USER=
 SMTP_PASS=
 MAIL_FROM=
 EOF
+
 sed -i "s|A_GENERER|$(openssl rand -hex 32)|" .env.saas
 chmod 600 .env .env.saas
 printf ".env\n.env.saas\n" >> .gitignore
@@ -113,11 +117,18 @@ printf ".env\n.env.saas\n" >> .gitignore
 
 # Build v8.4.8 version
 #docker build   --build-arg AOS_VERSION=v8.4.8   -t axelor/aos-ce:v8.4.8 .
+
 docker build --build-arg AOS_VERSION=v8.4.8 -t n2f:v1.0.0 .
+
 ou bien
 docker build --no-cache \
   --build-arg AOS_VERSION=v8.4.8 \
   -t n2f:v1.0.0 .
+
+ou bien: v9.2.0
+docker build \
+  --build-arg ADDITIONAL_MODULES="" \
+  -t n2f:1.1.0 .
 
   # docker buildx build --no-cache --build-arg AOS_VERSION=v8.4.8 -t n2f:v1.0.0 --load .
 
@@ -137,63 +148,18 @@ docker compose logs -f app
 docker compose logs db
 docker compose logs -f
 
--------------------------en cas de souci-----------------------------
-docker buildx build --build-arg AOS_VERSION=v8.4.8 -t n2f:v1.0.0 --load .
-docker compose up -d --force-recreate app
-docker exec n2f-app /home/axelor/tomcat/bin/version.sh | head -3
-------------------------------------------------------
+activer email smtp dasn axelor
+importer les roles dans gestion des appllications
+ajouter le role Expense User et role mobile base et mobile hr  et Timesheet Read:  a la group HRM
+ajpter la permission perm.base.Product.rwcde au role Expense User
+aussi perm.auth.my,perm.base.company.r
+
+-------------------------------
+
+https nginix :
 2. Installer Nginx et Certbot
 sudo apt install -y nginx certbot python3-certbot-nginx
-3. Créer la configuration du site
-sudo tee /etc/nginx/sites-available/n2f >/dev/null <<'EOF'
-server {
-    listen 80;
-    server_name taysirflow.duckdns.org;
 
-    client_max_body_size 100m;
-
-    location / {
-        proxy_pass http://127.0.0.1:8080;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_read_timeout 300s;
-    }
-}
-EOF
-
-sudo ln -s /etc/nginx/sites-available/n2f /etc/nginx/sites-enabled/n2f
-sudo rm -f /etc/nginx/sites-enabled/default
-sudo nginx -t && sudo systemctl reload nginx
----------------------------------------------------------------------------
-sudo tee /etc/nginx/sites-available/saas >/dev/null <<'EOF'
-server {
-    listen 80;
-    server_name saas-taysirflow.duckdns.org;
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-server {
-    listen 80;
-    server_name api-taysirflow.duckdns.org;
-    client_max_body_size 20m;
-    location / {
-        proxy_pass http://127.0.0.1:4000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-EOF
-------
-ou bien
 sudo nano /etc/nginx/sites-available/n2f
 server {
     listen 80;
@@ -268,9 +234,69 @@ sudo systemctl reload nginx
 # Certificat pour Axelor
 sudo certbot --nginx -d taysirflow.duckdns.org --redirect
 
+softstream2027@gmail.com
+
 # Certificat pour le SaaS (Front + API d'un coup)
 sudo certbot --nginx -d saas-taysirflow.duckdns.org -d api-taysirflow.duckdns.org --redirect
 
+/*
+ou bien:
+-------------------------en cas de souci-----------------------------
+docker buildx build --build-arg AOS_VERSION=v8.4.8 -t n2f:v1.0.0 --load .
+docker compose up -d --force-recreate app
+docker exec n2f-app /home/axelor/tomcat/bin/version.sh | head -3
+------------------------------------------------------
+
+3. Créer la configuration du site
+sudo tee /etc/nginx/sites-available/n2f >/dev/null <<'EOF'
+server {
+    listen 80;
+    server_name taysirflow.duckdns.org;
+
+    client_max_body_size 100m;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 300s;
+    }
+}
+EOF
+
+sudo ln -s /etc/nginx/sites-available/n2f /etc/nginx/sites-enabled/n2f
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t && sudo systemctl reload nginx
+---------------------------------------------------------------------------
+sudo tee /etc/nginx/sites-available/saas >/dev/null <<'EOF'
+server {
+    listen 80;
+    server_name saas-taysirflow.duckdns.org;
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+server {
+    listen 80;
+    server_name api-taysirflow.duckdns.org;
+    client_max_body_size 20m;
+    location / {
+        proxy_pass http://127.0.0.1:4000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+EOF
+------
+*/
 -------------------
 1. Créer les deux domaines sur duckdns.org
 
@@ -305,6 +331,11 @@ Si des liens ou redirections partent en http://, réglez application.base.url=ht
 Régénérez le token DuckDNS, visible sur votre capture d’écran.
 Limitez SSH (port 22) à votre IP dans le pare-feu Infomaniak si possible.
 Gardez ouverts uniquement 22, 80 et 443.
+
+
+2. Vérifier le renouvellement automatique du certificat
+sudo certbot renew --dry-run
+systemctl list-timers | grep certbot
 
 5. Robustesse après redémarrage
 

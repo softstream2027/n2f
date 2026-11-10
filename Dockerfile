@@ -1,12 +1,15 @@
 # syntax=docker/dockerfile:1.7
 
 ############################################
-# 1. SOURCES (Clonage Axelor 8.4.8 Public)
+# 1. SOURCES (Clonage Axelor 9.2.0 + modules externes)
 ############################################
 FROM alpine/git:latest AS sources
 
-ARG AOS_VERSION=v8.4.8
+ARG AOS_VERSION=v9.2.0
 ARG WEBAPP_VERSION=${AOS_VERSION}
+# Format : "URL_DU_GIT" ou "URL_DU_GIT|BRANCHE" (séparés par espace)
+# Exemple : "https://github.com/moi/module-a.git|main https://github.com/moi/module-b.git"
+ARG ADDITIONAL_MODULES=""
 
 WORKDIR /src
 
@@ -16,15 +19,29 @@ RUN set -eux; \
     git clone --depth 1 --branch "${AOS_VERSION}" https://github.com/axelor/axelor-open-suite.git /src/webapp/modules/axelor-open-suite; \
     chmod +x /src/webapp/gradlew
 
+# Clonage de vos modules spécifiques (boucle sur ADDITIONAL_MODULES)
+RUN set -eux; \
+    for module in $ADDITIONAL_MODULES; do \
+      if echo "$module" | grep -q "|"; then \
+        url=$(echo "$module" | cut -d'|' -f1); \
+        branch=$(echo "$module" | cut -d'|' -f2); \
+        name=$(basename "$url" .git); \
+        git clone --depth 1 -b "$branch" "$url" "/src/webapp/modules/$name"; \
+      else \
+        name=$(basename "$module" .git); \
+        git clone --depth 1 "$module" "/src/webapp/modules/$name"; \
+      fi; \
+    done
+
 ############################################
-# 2. BUILD STAGE (Avec Cache Gradle pour éviter les Timeouts)
+# 2. BUILD STAGE (Java 21 + Cache Gradle)
 ############################################
-FROM eclipse-temurin:11-jdk-jammy AS builder
+FROM eclipse-temurin:21-jdk-jammy AS builder
 
 WORKDIR /app
 COPY --from=sources /src/webapp /app
 
-# 👇 LE CACHE MOUNT EST LA CLÉ POUR ÉVITER LES TIMEOUTS ET L'ESPACE DISQUE
+# Cache mount conservé pour éviter timeouts et consommation disque
 RUN --mount=type=cache,target=/root/.gradle \
     set -eux; \
     apt-get update; \
@@ -37,13 +54,13 @@ RUN --mount=type=cache,target=/root/.gradle \
     rm -rf /var/lib/apt/lists/*
 
 ############################################
-# 3. RUNTIME STAGE (JRE 11 = Léger et Stable)
+# 3. RUNTIME STAGE (JRE 21 + Tomcat 10.1)
 ############################################
-FROM eclipse-temurin:11-jre-jammy
+FROM eclipse-temurin:21-jre-jammy
 
 ARG UID=1000
 ARG GID=1000
-ARG TOMCAT_VERSION=9.0.113
+ARG TOMCAT_VERSION=10.1.50
 ARG BUILD_DATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
 
 ENV USER=axelor
@@ -56,11 +73,11 @@ ENV CATALINA_HOME=${HOME}/tomcat
 ENV CATALINA_BASE=${HOME}/tomcat
 ENV PATH=${CATALINA_HOME}/bin:${PATH}
 
-# JVM optimisée pour les conteneurs
+# JVM optimisée conteneur (identique à votre ancienne version)
 ENV JAVA_OPTS="-Dfile.encoding=UTF-8 -Djava.security.egd=file:/dev/./urandom -Daxelor.ScriptCacheSize=500 -Daxelor.ScriptCacheExpireTime=10 -XX:+UseContainerSupport -XX:MaxRAMPercentage=75 -XX:+ExitOnOutOfMemoryError"
 ENV CATALINA_OPTS="-server"
 
-# Installation des outils de base (Postgres client pour le script d'entrypoint)
+# Outils de base
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
@@ -72,7 +89,7 @@ RUN set -eux; \
     echo "${TZ}" > /etc/timezone; \
     rm -rf /var/lib/apt/lists/*
 
-# Création de l'utilisateur et des dossiers
+# Utilisateur et dossiers
 RUN set -eux; \
     groupadd -g ${GID} ${USER}; \
     useradd -m -d ${HOME} -u ${UID} -g ${GID} -s /bin/bash ${USER}; \
@@ -82,14 +99,14 @@ RUN set -eux; \
 USER ${USER}
 WORKDIR ${CATALINA_HOME}
 
-# Installation de Tomcat 9 (javax.servlet, requis par Axelor Open Platform 7.x / AOS 8.4)
+# Installation de Tomcat 10.1 (jakarta.servlet, requis par Axelor 9)
 RUN set -eux; \
     TOMCAT_MAJOR="${TOMCAT_VERSION%%.*}"; \
     curl -fsSL "https://archive.apache.org/dist/tomcat/tomcat-${TOMCAT_MAJOR}/v${TOMCAT_VERSION}/bin/apache-tomcat-${TOMCAT_VERSION}.tar.gz" \
       | tar xz --strip-components=1 -C ${CATALINA_HOME}; \
     rm -rf webapps/* temp/* work/* logs/*
 
-# Optimisation de Tomcat (HealthCheck, logs)
+# Optimisation Tomcat (HealthCheck, logs) - inchangé
 RUN set -eux; \
     sed -i '/AccessLogValve/d' conf/server.xml; \
     sed -i '/<\/Host>/i\
@@ -100,7 +117,7 @@ RUN set -eux; \
 COPY --from=builder --chown=${USER}:${USER} /opt/webapp/ ${CATALINA_HOME}/webapps/
 COPY --from=builder --chown=${USER}:${USER} /opt/reports/ ${CATALINA_HOME}/reports/
 
-# Entrypoint et Healthcheck
+# Entrypoint et Healthcheck (conservés tels quels)
 COPY --chmod=755 docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 COPY --chmod=755 post-startup.d/ /usr/local/bin/post-startup.d/
 
