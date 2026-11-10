@@ -13,7 +13,8 @@ sudo chown -R ubuntu:ubuntu /mnt/data
 git clone https://github.com/softstream2027/n2f.git
 cd n2f/
 ls -la
-
+nano .env   
+nano .env.saas
 
 git config --global user.name "softstream2027"
 git config --global user.email "softstream2027@gmail.com"
@@ -29,20 +30,21 @@ sudo apt update
 sudo apt install docker.io -y
 sudo usermod -aG docker $USER
 newgrp docker
-
-
 sudo docker system prune -a --volumes -f
-df -h /
-sudo mkdir -p /mnt/data/docker
 
+sudo mkdir -p /mnt/data/docker
 sudo rsync -aHAX --info=progress2 /var/lib/docker/ /mnt/data/docker/
 sudo systemctl stop docker
 sudo mkdir -p /etc/docker
+
 echo '{ "data-root": "/mnt/data/docker" }' | sudo tee /etc/docker/daemon.json
 sudo nano /etc/docker/daemon.json
+
 {
   "data-root": "/mnt/data/docker"
 }
+
+df -h /
 sudo systemctl start docker
 docker info | grep -E "Docker Root Dir|Storage Driver"
 docker ps -a
@@ -77,70 +79,36 @@ cd /mnt/data/n2f
 Fichier .env (dans /mnt/data/n2f/)
 
 cd /mnt/data/n2f
-cat > .env <<EOF
-DB_USER=sbsoft2026
-DB_NAME=sbsoft2026
-DB_PASSWORD=sbsoft2026
-APP_LOAD_APPS=all
-APP_DEMO_DATA=true
-JAVA_XMX=4096m
-SAAS_DB_USER=saas
-SAAS_DB_NAME=saas
-SAAS_DB_PASSWORD=saas
-EOF
+
 chmod 600 .env
 echo ".env" >> .gitignore
 --------------------------------
 .env.saas (toutes les autres variables du SaaS) :
-
-cat > .env.saas <<'EOF'
-FRONTEND_URL=https://saas-taysirflow.duckdns.org
-NEXT_PUBLIC_API_URL=https://api-taysirflow.duckdns.org
-NEXT_PUBLIC_AXELOR_URL=https://taysirflow.duckdns.org
-APP_SECRET_KEY=A_GENERER
-STRIPE_SECRET_KEY=
-STRIPE_WEBHOOK_SECRET=
-NEXT_PUBLIC_STRIPE_PUBLIC_KEY=
-STRIPE_PRICE_STARTER=
-STRIPE_PRICE_BUSINESS=
-STRIPE_PRICE_PRODUCTION=
-AXELOR_USERNAME=
-AXELOR_PASSWORD=
-AXELOR_CLIENT_GROUP_CODE=
-SMTP_HOST=
-SMTP_PORT=
-SMTP_USER=
-SMTP_PASS=
-MAIL_FROM=
-EOF
+ 
 
 sed -i "s|A_GENERER|$(openssl rand -hex 32)|" .env.saas
 chmod 600 .env .env.saas
 printf ".env\n.env.saas\n" >> .gitignore
 
-
-# Build v8.4.8 version
-#docker build   --build-arg AOS_VERSION=v8.4.8   -t axelor/aos-ce:v8.4.8 .
-
-docker build --build-arg AOS_VERSION=v8.4.8 -t n2f:v1.0.0 .
-
-ou bien
-docker build --no-cache \
-  --build-arg AOS_VERSION=v8.4.8 \
-  -t n2f:v1.0.0 .
-
-ou bien: v9.2.0
+# Build  v9.2.0 version
 docker build \
   --build-arg ADDITIONAL_MODULES="" \
   -t n2f:1.1.0 .
 
+  /*
+# Build v8.4.8 version
+#docker build   --build-arg AOS_VERSION=v8.4.8   -t axelor/aos-ce:v8.4.8 .
+#docker build --build-arg AOS_VERSION=v8.4.8 -t n2f:v1.0.0 .
+ou bien
+docker build --no-cache \
+  --build-arg AOS_VERSION=v8.4.8 \
+  -t n2f:v1.0.0 .
   # docker buildx build --no-cache --build-arg AOS_VERSION=v8.4.8 -t n2f:v1.0.0 --load .
+*/
 
 docker images
-
 sudo mkdir -p /mnt/data/axelor-data /mnt/data/postgres-data
 sudo chown -R 1000:1000 /mnt/data/axelor-data
-
 sudo apt install -y docker-compose-v2
 docker compose down
 sudo rm -rf /mnt/data/postgres-data/*
@@ -152,14 +120,133 @@ docker compose logs -f app
 docker compose logs db
 docker compose logs -f
 
-activer email smtp dasn axelor
+activer email smtp dasn axelor : Compte par défaut Compte par défaut ssl
 importer les roles dans gestion des appllications
 ajouter le role Expense User et role mobile base et mobile hr  et Timesheet Read:  a la group HRM
 ajpter la permission perm.base.Product.rwcde au role Expense User
 aussi perm.auth.my,perm.base.company.r
 
--------------------------------
 
+------------pas avec nginix on a utiliser caddy:2-------------------
+
+-------------------
+1. Créer les deux domaines sur duckdns.org
+
+Votre compte est à 1/5, il reste de la place. Dans la case « sub domain » puis « add domain », créez :
+
+saas-taysirflow
+api-taysirflow
+---------------
+sudo ln -s /etc/nginx/sites-available/saas /etc/nginx/sites-enabled/saas
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d saas-taysirflow.duckdns.org -d api-taysirflow.duckdns.org --redirect
+--------------------------------------------------------------------------
+4. Ouvrir les ports chez Infomaniak
+
+Dans le pare-feu du panneau Infomaniak, autorisez TCP 80 et 443 en entrée. Sans cela, Let’s Encrypt ne peut pas valider le domaine. Si ufw est actif : sudo ufw allow 80,443/tcp.
+5. Obtenir le certificat HTTPS
+sudo certbot --nginx -d taysirflow.duckdns.org --redirect
+softstream2027@gmail.com
+6. Vérifier Depuis votre PC :
+curl -I https://taysirflow.duckdns.org
+
+2. Vérifier le renouvellement automatique du certificat
+sudo certbot renew --dry-run
+systemctl list-timers | grep certbot
+3. Sécuriser Axelor
+
+Changez le mot de passe admin (et ceux des comptes par défaut) dès maintenant.
+Si des liens ou redirections partent en http://, réglez application.base.url=https://taysirflow.duckdns.org.
+
+4. Sécurité générale
+
+Régénérez le token DuckDNS, visible sur votre capture d’écran.
+Limitez SSH (port 22) à votre IP dans le pare-feu Infomaniak si possible.
+Gardez ouverts uniquement 22, 80 et 443.
+
+
+2. Vérifier le renouvellement automatique du certificat
+sudo certbot renew --dry-run
+systemctl list-timers | grep certbot
+
+5. Robustesse après redémarrage
+
+Vérifiez que /mnt/data est monté automatiquement (/etc/fstab), car Docker et containerd y sont maintenant.
+Vérifiez que les services démarrent au boot : 
+systemctl is-enabled docker containerd nginx
+Vos conteneurs doivent avoir restart: unless-stopped dans le compose.
+6. Sauvegardes de la base
+docker exec n2f-db pg_dump -U <user> <db> | gzip > /mnt/data/backup-$(date +%F).sql.gz
+Vous pouvez la planifier avec crontab -e, par exemple chaque nuit à 2h. Pensez aussi à copier ces sauvegardes hors du serveur.
+
+cd /mnt/data/n2f
+mkdir -p /mnt/data/backups
+cat > backup.sh <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+
+COMPOSE_DIR=/mnt/data/n2f
+BACKUP_DIR=/mnt/data/backups
+RETENTION_DAYS=7
+STAMP=$(date +%F_%H%M)
+
+DB_USER=$(grep '^DB_USER=' "$COMPOSE_DIR/.env" | cut -d= -f2-)
+DB_NAME=$(grep '^DB_NAME=' "$COMPOSE_DIR/.env" | cut -d= -f2-)
+
+mkdir -p "$BACKUP_DIR"
+echo "[$(date '+%F %T')] Début de la sauvegarde"
+
+# 1. Base de données (format custom, compressé, restaurable avec pg_restore)
+DB_FILE="$BACKUP_DIR/db_${DB_NAME}_${STAMP}.dump"
+docker exec n2f-db pg_dump -U "$DB_USER" -d "$DB_NAME" -Fc > "$DB_FILE.tmp"
+
+# Vérification : le dump doit être lisible
+docker exec -i n2f-db pg_restore -l < "$DB_FILE.tmp" > /dev/null
+mv "$DB_FILE.tmp" "$DB_FILE"
+
+# 2. Fichiers Axelor (pièces jointes, etc.)
+FILES_FILE="$BACKUP_DIR/files_${STAMP}.tar.gz"
+tar czf "$FILES_FILE.tmp" -C /mnt/data axelor-data
+mv "$FILES_FILE.tmp" "$FILES_FILE"
+
+# 3. Rotation
+find "$BACKUP_DIR" -type f \( -name 'db_*.dump' -o -name 'files_*.tar.gz' \) -mtime +"$RETENTION_DAYS" -delete
+
+echo "[$(date '+%F %T')] OK : $(basename "$DB_FILE") ($(du -h "$DB_FILE" | cut -f1)), $(basename "$FILES_FILE") ($(du -h "$FILES_FILE" | cut -f1))"
+EOF
+chmod 700 backup.sh
+2. Tester une fois à la main
+./backup.sh
+ls -lh /mnt/data/backups
+3. Planifier chaque nuit à 2h
+crontab -e
+0 2 * * * /mnt/data/n2f/backup.sh >> /mnt/data/backups/backup.log 2>&1
+--------------------------------------
+Restauration
+cd /mnt/data/n2f
+docker compose stop app
+docker exec -i n2f-db pg_restore -U sbsoft2026 -d sbsoft2026 --clean --if-exists --no-owner < /mnt/data/backups/db_sbsoft2026_2026-11-09_0938.dump
+docker compose start app
+Pour les fichiers :
+sudo tar xzf /mnt/data/backups/files_2026-11-09_0938.tar.gz -C /mnt/data
+
+1. Corriger les variables dans GitLab
+https://gitlab.com/k8s-axelor/softstream-saas/-/settings/ci_cd#js-cicd-variables-settings
+NEXT_PUBLIC_API_URL=https://api-taysirflow.duckdns.org et non pas https://softstream.taysirflow.duckdns.org
+et alors modifier le url webhooks dans stripe:
+1. Corriger l’URL dans Stripe Cliquez sur Modifier la destination et remplacez l’URL par :
+https://api-taysirflow.duckdns.org/api/webhooks/stripe
+------------------------------------------------------
+
+Utilisez-la dans votre Helm values.yaml : 
+image:
+  repository: n2f
+  tag: v1.0.0
+  pullPolicy: IfNotPresent
+
+
+------------pas avec nginix on a utiliser caddy:2-------------------
 https nginix :
 2. Installer Nginx et Certbot
 sudo apt install -y nginx certbot python3-certbot-nginx
@@ -301,118 +388,3 @@ server {
 EOF
 ------
 */
--------------------
-1. Créer les deux domaines sur duckdns.org
-
-Votre compte est à 1/5, il reste de la place. Dans la case « sub domain » puis « add domain », créez :
-
-saas-taysirflow
-api-taysirflow
----------------
-sudo ln -s /etc/nginx/sites-available/saas /etc/nginx/sites-enabled/saas
-sudo nginx -t && sudo systemctl reload nginx
-sudo certbot --nginx -d saas-taysirflow.duckdns.org -d api-taysirflow.duckdns.org --redirect
---------------------------------------------------------------------------
-4. Ouvrir les ports chez Infomaniak
-
-Dans le pare-feu du panneau Infomaniak, autorisez TCP 80 et 443 en entrée. Sans cela, Let’s Encrypt ne peut pas valider le domaine. Si ufw est actif : sudo ufw allow 80,443/tcp.
-5. Obtenir le certificat HTTPS
-sudo certbot --nginx -d taysirflow.duckdns.org --redirect
-softstream2027@gmail.com
-6. Vérifier Depuis votre PC :
-curl -I https://taysirflow.duckdns.org
-
-2. Vérifier le renouvellement automatique du certificat
-sudo certbot renew --dry-run
-systemctl list-timers | grep certbot
-3. Sécuriser Axelor
-
-Changez le mot de passe admin (et ceux des comptes par défaut) dès maintenant.
-Si des liens ou redirections partent en http://, réglez application.base.url=https://taysirflow.duckdns.org.
-
-4. Sécurité générale
-
-Régénérez le token DuckDNS, visible sur votre capture d’écran.
-Limitez SSH (port 22) à votre IP dans le pare-feu Infomaniak si possible.
-Gardez ouverts uniquement 22, 80 et 443.
-
-
-2. Vérifier le renouvellement automatique du certificat
-sudo certbot renew --dry-run
-systemctl list-timers | grep certbot
-
-5. Robustesse après redémarrage
-
-Vérifiez que /mnt/data est monté automatiquement (/etc/fstab), car Docker et containerd y sont maintenant.
-Vérifiez que les services démarrent au boot : 
-systemctl is-enabled docker containerd nginx
-Vos conteneurs doivent avoir restart: unless-stopped dans le compose.
-6. Sauvegardes de la base
-docker exec n2f-db pg_dump -U <user> <db> | gzip > /mnt/data/backup-$(date +%F).sql.gz
-Vous pouvez la planifier avec crontab -e, par exemple chaque nuit à 2h. Pensez aussi à copier ces sauvegardes hors du serveur.
-
-cd /mnt/data/n2f
-mkdir -p /mnt/data/backups
-cat > backup.sh <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-umask 077
-
-COMPOSE_DIR=/mnt/data/n2f
-BACKUP_DIR=/mnt/data/backups
-RETENTION_DAYS=7
-STAMP=$(date +%F_%H%M)
-
-DB_USER=$(grep '^DB_USER=' "$COMPOSE_DIR/.env" | cut -d= -f2-)
-DB_NAME=$(grep '^DB_NAME=' "$COMPOSE_DIR/.env" | cut -d= -f2-)
-
-mkdir -p "$BACKUP_DIR"
-echo "[$(date '+%F %T')] Début de la sauvegarde"
-
-# 1. Base de données (format custom, compressé, restaurable avec pg_restore)
-DB_FILE="$BACKUP_DIR/db_${DB_NAME}_${STAMP}.dump"
-docker exec n2f-db pg_dump -U "$DB_USER" -d "$DB_NAME" -Fc > "$DB_FILE.tmp"
-
-# Vérification : le dump doit être lisible
-docker exec -i n2f-db pg_restore -l < "$DB_FILE.tmp" > /dev/null
-mv "$DB_FILE.tmp" "$DB_FILE"
-
-# 2. Fichiers Axelor (pièces jointes, etc.)
-FILES_FILE="$BACKUP_DIR/files_${STAMP}.tar.gz"
-tar czf "$FILES_FILE.tmp" -C /mnt/data axelor-data
-mv "$FILES_FILE.tmp" "$FILES_FILE"
-
-# 3. Rotation
-find "$BACKUP_DIR" -type f \( -name 'db_*.dump' -o -name 'files_*.tar.gz' \) -mtime +"$RETENTION_DAYS" -delete
-
-echo "[$(date '+%F %T')] OK : $(basename "$DB_FILE") ($(du -h "$DB_FILE" | cut -f1)), $(basename "$FILES_FILE") ($(du -h "$FILES_FILE" | cut -f1))"
-EOF
-chmod 700 backup.sh
-2. Tester une fois à la main
-./backup.sh
-ls -lh /mnt/data/backups
-3. Planifier chaque nuit à 2h
-crontab -e
-0 2 * * * /mnt/data/n2f/backup.sh >> /mnt/data/backups/backup.log 2>&1
---------------------------------------
-Restauration
-cd /mnt/data/n2f
-docker compose stop app
-docker exec -i n2f-db pg_restore -U sbsoft2026 -d sbsoft2026 --clean --if-exists --no-owner < /mnt/data/backups/db_sbsoft2026_2026-11-09_0938.dump
-docker compose start app
-Pour les fichiers :
-sudo tar xzf /mnt/data/backups/files_2026-11-09_0938.tar.gz -C /mnt/data
-
-1. Corriger les variables dans GitLab
-https://gitlab.com/k8s-axelor/softstream-saas/-/settings/ci_cd#js-cicd-variables-settings
-NEXT_PUBLIC_API_URL=https://api-taysirflow.duckdns.org et non pas https://softstream.taysirflow.duckdns.org
-et alors modifier le url webhooks dans stripe:
-1. Corriger l’URL dans Stripe Cliquez sur Modifier la destination et remplacez l’URL par :
-https://api-taysirflow.duckdns.org/api/webhooks/stripe
-------------------------------------------------------
-
-Utilisez-la dans votre Helm values.yaml : 
-image:
-  repository: n2f
-  tag: v1.0.0
-  pullPolicy: IfNotPresent
