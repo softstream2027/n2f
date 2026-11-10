@@ -1,31 +1,77 @@
+# ─────────────────────────────────────────────────────────────
+# Stack n2f : Axelor Open Suite 9 (notes de frais) + SaaS + Caddy (TLS)
+# Aligné sur le guide d'installation Axelor AOS 9 :
+#   Java 21 / Tomcat 10.1 / PostgreSQL >= 16 (unaccent) / Caddy devant Tomcat
+#
+# Seul Caddy est exposé (80/443). Tout le reste reste interne à Docker.
+# Variables : voir .env.example (copier en .env, chmod 600)
+# Droits    : chown -R 1000:1000 /mnt/data/axelor-data
+# ─────────────────────────────────────────────────────────────
+
 x-logging: &default-logging
   driver: json-file
   options:
     max-size: "10m"
     max-file: "5"
 
+x-hardened: &hardened
+  restart: unless-stopped
+  logging: *default-logging
+  security_opt:
+    - no-new-privileges:true
+
 services:
+  # ───────────── REVERSE PROXY (TLS automatique) ─────────────
+  caddy:
+    <<: *hardened
+    image: caddy:2
+    container_name: n2f-caddy
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL manquant}
+      AXELOR_DOMAIN: ${AXELOR_DOMAIN:?AXELOR_DOMAIN manquant}
+      SAAS_DOMAIN: ${SAAS_DOMAIN:?SAAS_DOMAIN manquant}
+      API_DOMAIN: ${API_DOMAIN:?API_DOMAIN manquant}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+      - backend
+      - frontend
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    networks:
+      - proxy-net
+
   # ───────────── AXELOR ─────────────
   app:
+    <<: *hardened
     image: n2f:v1.0.0
     container_name: n2f-app
-    restart: unless-stopped
-    init: true
+    # tini est déjà PID 1 dans l'image : pas de "init: true"
     stop_grace_period: 60s
     environment:
       PGHOST: db
       PGPORT: "5432"
-      PGUSER: ${DB_USER}
-      PGPASSWORD: ${DB_PASSWORD}
-      PGDATABASE: ${DB_NAME}
+      PGUSER: ${DB_USER:?DB_USER manquant}
+      PGPASSWORD: ${DB_PASSWORD:?DB_PASSWORD manquant}
+      PGDATABASE: ${DB_NAME:?DB_NAME manquant}
       JAVA_XMX: ${JAVA_XMX:-4096m}
       APP_MODE: prod
       APP_LANGUAGE: fr
+      APP_BASE_URL: https://${AXELOR_DOMAIN}
       APP_DEMO_DATA: ${APP_DEMO_DATA:-false}
       APP_LOAD_APPS: ${APP_LOAD_APPS:-}
       # ENCRYPTION_PASSWORD: ${ENCRYPTION_PASSWORD}
-    ports:
-      - "127.0.0.1:8080:8080"
+    expose:
+      - "8080"
     volumes:
       - /mnt/data/axelor-data:/data
       - ./post-startup.d:/usr/local/bin/post-startup.d:ro
@@ -37,48 +83,63 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-      start_period: 600s
+      start_period: 1800s
     mem_limit: 6g
-    security_opt:
-      - no-new-privileges:true
-    logging: *default-logging
+    pids_limit: 1024
+    cap_drop:
+      - ALL
     networks:
+      - proxy-net
       - axelor-net
+      - db-net
 
   db:
-    image: postgres:18
+    <<: *hardened
+    image: postgres:18          # >= 16 requis par Axelor
     container_name: n2f-db
-    restart: unless-stopped
     stop_grace_period: 60s
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
+    # Valeurs prudentes pour ~16 Gio de RAM hôte : à adapter à votre serveur
+    command:
+      - postgres
+      - -c
+      - max_connections=200
+      - -c
+      - shared_buffers=1GB
+      - -c
+      - effective_cache_size=4GB
+      - -c
+      - work_mem=16MB
+      - -c
+      - log_min_duration_statement=1000
     volumes:
       # PostgreSQL 18 : monter sur /var/lib/postgresql (sans /data)
       - /mnt/data/postgres-data:/var/lib/postgresql
+      # Active l'extension "unaccent" (obligatoire) à la première initialisation
+      - ./initdb:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 30s
     shm_size: 256m
-    security_opt:
-      - no-new-privileges:true
-    logging: *default-logging
     networks:
-      - axelor-net
+      - db-net
 
   # ───────────── SAAS ─────────────
   saas-db:
+    <<: *hardened
     image: postgres:17-alpine
     container_name: saas-db
-    restart: unless-stopped
     stop_grace_period: 60s
     environment:
-      POSTGRES_USER: ${SAAS_DB_USER}
-      POSTGRES_PASSWORD: ${SAAS_DB_PASSWORD}
-      POSTGRES_DB: ${SAAS_DB_NAME}
+      POSTGRES_USER: ${SAAS_DB_USER:?SAAS_DB_USER manquant}
+      POSTGRES_PASSWORD: ${SAAS_DB_PASSWORD:?SAAS_DB_PASSWORD manquant}
+      POSTGRES_DB: ${SAAS_DB_NAME:?SAAS_DB_NAME manquant}
     volumes:
       - /mnt/data/saas-postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -86,69 +147,94 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-    security_opt:
-      - no-new-privileges:true
-    logging: *default-logging
+      start_period: 30s
     networks:
-      - saas-net
+      - saas-data-net
 
   redis:
+    <<: *hardened
     image: redis:7-alpine
     container_name: saas-redis
-    restart: unless-stopped
+    # File de jobs (BullMQ...) : ajoutez --maxmemory-policy noeviction
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - /mnt/data/redis-data:/data
-    security_opt:
-      - no-new-privileges:true
-    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     networks:
-      - saas-net
+      - saas-data-net
 
   backend:
-    image: bassembenabbes/softstream-saas-backend:latest   # à figer sur un tag précis
+    <<: *hardened
+    # À figer sur un tag précis ou un digest @sha256:..., jamais "latest" en production
+    image: bassembenabbes/softstream-saas-backend:latest
     container_name: saas-backend
-    restart: unless-stopped
     depends_on:
       saas-db:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     env_file:
       - .env.saas
     environment:
+      # Mot de passe avec @ : / ? # : l'encoder en pourcentage dans l'URL
       DATABASE_URL: postgresql://${SAAS_DB_USER}:${SAAS_DB_PASSWORD}@saas-db:5432/${SAAS_DB_NAME}?schema=public
       REDIS_URL: redis://redis:6379
       AXELOR_BASE_URL: http://app:8080
-    ports:
-      - "127.0.0.1:4000:4000"
+    expose:
+      - "4000"
+    # healthcheck:
+    #   test: ["CMD", "wget", "-qO-", "http://localhost:4000/health"]
+    #   interval: 30s
+    #   timeout: 5s
+    #   retries: 5
+    #   start_period: 40s
     mem_limit: 1g
-    security_opt:
-      - no-new-privileges:true
-    logging: *default-logging
+    pids_limit: 512
+    cap_drop:
+      - ALL
     networks:
+      - proxy-net
       - saas-net
+      - saas-data-net
       - axelor-net
 
   frontend:
-    image: bassembenabbes/softstream-saas-frontend:latest  # à figer sur un tag précis
+    <<: *hardened
+    # À figer sur un tag précis ou un digest
+    image: bassembenabbes/softstream-saas-frontend:latest
     container_name: saas-frontend
-    restart: unless-stopped
     depends_on:
       - backend
     env_file:
       - .env.saas
-    ports:
-      - "127.0.0.1:3000:3000"
+    expose:
+      - "3000"
     mem_limit: 1g
-    security_opt:
-      - no-new-privileges:true
-    logging: *default-logging
+    pids_limit: 512
+    cap_drop:
+      - ALL
     networks:
+      - proxy-net
       - saas-net
 
+volumes:
+  caddy_data:
+  caddy_config:
+
 networks:
-  axelor-net:
+  proxy-net:         # Caddy <-> app / backend / frontend
     driver: bridge
-  saas-net:
+  axelor-net:        # app <-> backend, accès sortant (e-mails...)
     driver: bridge
+  saas-net:          # frontend <-> backend
+    driver: bridge
+  db-net:            # base Axelor, sans accès Internet
+    driver: bridge
+    internal: true
+  saas-data-net:     # base SaaS + Redis, sans accès Internet
+    driver: bridge
+    internal: true

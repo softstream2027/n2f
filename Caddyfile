@@ -1,0 +1,56 @@
+# Reverse proxy + TLS automatique (Let's Encrypt), d'après le guide Axelor AOS 9.
+{
+	email {$ACME_EMAIL}
+}
+
+(common) {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+		Referrer-Policy "strict-origin"
+		-Server
+	}
+	log {
+		output stdout
+	}
+}
+
+# ERP Axelor
+{$AXELOR_DOMAIN} {
+	tls {
+		protocols tls1.2 tls1.3
+	}
+	import common
+	request_body {
+		max_size 20MB
+	}
+	reverse_proxy app:8080 {
+		transport http {
+			read_timeout 1800s
+			write_timeout 1800s
+		}
+	}
+}
+
+# Application SaaS (frontend)
+{$SAAS_DOMAIN} {
+	tls {
+		protocols tls1.2 tls1.3
+	}
+	import common
+	reverse_proxy frontend:3000
+}
+
+# API SaaS (backend)
+{$API_DOMAIN} {
+	tls {
+		protocols tls1.2 tls1.3
+	}
+	import common
+	request_body {
+		max_size 20MB
+	}
+	reverse_proxy backend:4000
+}
