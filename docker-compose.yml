@@ -73,15 +73,16 @@ services:
       # L'entrypoint gère déjà db.default.ddl=update, data.upload.dir, data.export.dir, etc.
       AXELOR_CONFIG_APPLICATION_BASE_URL: https://${AXELOR_DOMAIN}
       AXELOR_CONFIG_SESSION_TIMEOUT: "60"
+      ADDITIONAL_PROPERTIES: "auth.local.basic-auth=indirect, direct"
       APP_DEMO_DATA: ${APP_DEMO_DATA:-false}
       APP_LOAD_APPS: ${APP_LOAD_APPS:-}
-      ADDITIONAL_PROPERTIES: ${ADDITIONAL_PROPERTIES}
       # ENCRYPTION_PASSWORD: ${ENCRYPTION_PASSWORD}
     expose:
       - "8080"
     volumes:
       - /mnt/data/axelor-data:/data
       - ./post-startup.d:/usr/local/bin/post-startup.d:ro
+      - ./server.xml:/home/axelor/tomcat/conf/server.xml:ro
     depends_on:
       db:
         condition: service_healthy
