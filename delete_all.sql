@@ -1,261 +1,245 @@
+BEGIN;
 
-  
-  delete from  account_tax_line where end_date is not null ;
+-- 🚀 DÉSACTIVATION TEMPORAIRE DES CLÉS ÉTRANGÈRES POUR PERMETTRE LE NETTOYAGE MASSIF
+SET session_replication_role = 'replica';
 
-   update  base_Product set default_Supplier_Partner=null;
-   delete  from supplychain_mrp_product_set ;
-   
-   delete from  account_reconcile_payment_move_line_distribution_list;
+-- 1. NETTOYAGE DES TABLES LIEES AUX PRODUITS / VARIANTES
+DELETE FROM account_tax_line WHERE end_date IS NOT NULL;
+UPDATE base_Product SET default_Supplier_Partner = NULL;
 
-  delete from account_payment_move_line_distribution;
-     delete from base_product_variant_config;
+DELETE FROM base_product_variant_config_product_variant_value1set;
+DELETE FROM base_product_variant_config_product_variant_value2set;
+DELETE FROM base_product_variant_config;
+DELETE FROM base_product_variant;
+DELETE FROM base_product_variant_value;
 
-update production_manuf_order set product_variant_value1=null;
-update production_manuf_order set product_variant_value2=null;
-update production_manuf_order set product_variant_value3=null;
-update production_manuf_order set product_variant_value4=null;
-update production_manuf_order set product_variant_value5=null;
-update production_manuf_order set product_variant_value6=null;
-update production_manuf_order set product_variant_value7=null;
-update production_manuf_order set product_variant_value8=null;
-update production_manuf_order set product_variant_value9=null;
-update production_manuf_order set product_variant_value10=null;
-update production_manuf_order set product_variant_value11=null;
-update production_manuf_order set product_variant_value12=null;
-update production_manuf_order set product_variant_value13=null;
-update production_manuf_order set product_variant_value14=null;
-update production_manuf_order set product_variant_value15=null;
-update production_manuf_order set product_variant_value16=null;
+DELETE FROM supplychain_mrp_product_set;
+DELETE FROM account_reconcile_payment_move_line_distribution_list;
+DELETE FROM account_payment_move_line_distribution;
 
- delete from base_product_variant_value;
- delete from base_product_variant;
-delete from base_product_variant_config_product_variant_value1set;
- delete from base_product_variant_config_product_variant_value2set;
+-- 2. NETTOYAGE COMPTABLE (Factures, Écritures, Paiements)
+DELETE FROM account_pay_voucher_due_element;
+DELETE FROM account_pay_voucher_element_to_pay;
+UPDATE account_move SET payment_voucher = NULL;
+DELETE FROM account_payment_voucher;
 
- 
+DELETE FROM account_invoice_line_tax_line_set;
+DELETE FROM ACCOUNT_INVOICE_line;
+DELETE FROM account_invoice_term_payment_reconcile_list;
+DELETE FROM account_invoice_term_payment;
+DELETE FROM account_invoice_term;
+DELETE FROM account_invoice_line_tax;
 
-     delete from account_pay_voucher_due_element;
-     delete from account_pay_voucher_element_to_pay;
-      update account_move set  payment_voucher=null ;
+UPDATE account_invoice SET move = NULL;
+DELETE FROM account_move_line;
+DELETE FROM account_invoice_payment;
+DELETE FROM account_move;
+DELETE FROM account_invoice_stock_move_set;
 
-     delete from account_payment_voucher;
+-- 3. PRODUCTION / PROJETS / TEMPS
+DELETE FROM production_temp_bom_tree;
+DELETE FROM project_project_task_tag_set;
+DELETE FROM hr_timesheet_line;
+DELETE FROM project_project_check_list_item;
+DELETE FROM project_project_task_timer_list;
+DELETE FROM project_project_planning_time;
+DELETE FROM project_project_task;
 
-     delete from account_invoice_line_project_task_set;
+-- 4. VENTES ET ACHATS (Stock et commandes)
+DELETE FROM stock_inventory_line;
+DELETE FROM stock_stock_location_line_history;
+DELETE FROM stock_stock_location_line;
+UPDATE stock_stock_move_line SET tracking_number = NULL;
+DELETE FROM stock_tracking_number;
 
-     delete from account_invoice_line_tax_line_set;
- delete from ACCOUNT_INVOICE_line;
- delete from account_invoice_term_payment_reconcile_list;
- delete from account_invoice_term_payment;
- delete from account_invoice_term;
- delete from account_invoice_line_tax;
+DELETE FROM stock_stock_move_line;
+DELETE FROM production_cost_sheet_line;
+DELETE FROM production_cost_sheet;
+DELETE FROM production_manuf_order_production_order_set;
+DELETE FROM production_manuf_order_sale_order_set;
+DELETE FROM production_operation_order_duration;
+DELETE FROM production_operation_order;
+DELETE FROM production_prod_product;
 
- update account_invoice  set move=null;
- delete from account_move_line;
- delete from account_invoice_payment;
- delete from account_move;
- delete from account_invoice_stock_move_set;
+DELETE FROM stock_stock_move_purchase_order_set;
+DELETE FROM stock_stock_move_sale_order_set;
+DELETE FROM stock_stock_move;
 
- 
-  delete from production_temp_bom_tree;
-  delete from production_operation_order_employee_set;
-  delete from project_project_task_tag_set;
-  delete from hr_timesheet_line;
+DELETE FROM production_manuf_order;
+DELETE FROM quality_qi_identification_sourceqilist;
+DELETE FROM quality_quality_improvement;
+DELETE FROM quality_qi_identification;
+DELETE FROM sale_complementary_product_selected;
+DELETE FROM sale_sale_order_line;
+DELETE FROM sale_sale_order_line_tax;
+DELETE FROM production_production_order;
 
- delete from project_project_check_list_item;
- delete from project_project_check_list_item;
- delete from project_project_task_timer_list;
- 
- delete from businessproject_invoicing_project_project_task_set;
- delete from businessproject_invoicing_project;
- delete from account_invoice;
- delete from sale_sale_order_line_tax_line_set;
- delete from project_project_planning_time;
- delete from project_project_task;
- delete from stock_inventory_line;
- delete from stock_stock_location_line_history;
- delete from stock_stock_location_line;
- update stock_stock_move_line set tracking_number=null ;
- delete from stock_tracking_number;
- delete from stock_logistical_form_line;
- delete from stock_stock_move_line;
- delete from production_cost_sheet_line;
- delete from production_cost_sheet;
- delete from production_manuf_order_production_order_set;
- delete from production_manuf_order_sale_order_set;
- delete from production_operation_order_duration;
- delete from production_operation_order;
- delete from production_prod_product;
- delete from production_production_order_manuf_order_set;
- delete from stock_stock_move_purchase_order_set;
- delete from stock_stock_move_sale_order_set;
- delete from stock_stock_move;
- delete from production_manuf_order;
- delete from quality_qi_identification_sourceqilist;
- delete from quality_quality_improvement;
- delete from quality_qi_identification;
-  delete from  sale_complementary_product_selected;
- delete from sale_sale_order_line;
- delete from sale_sale_order_line_tax;
- delete from production_production_order;
- delete from SALE_SALE_ORDER;
- delete from purchase_purchase_order_line_tax_line_set;
- delete from purchase_purchase_order_line;
- delete from purchase_purchase_order_line_tax;
- delete from PURCHASE_PURCHASE_ORDER;
+DELETE FROM SALE_SALE_ORDER;
+DELETE FROM purchase_purchase_order_line_tax_line_set;
+DELETE FROM purchase_purchase_order_line;
+DELETE FROM purchase_purchase_order_line_tax;
+DELETE FROM PURCHASE_PURCHASE_ORDER;
 
- update base_product set  default_bill_of_material=null;
- delete from hr_timesheet_line;
-  delete from production_bill_of_material_line;
-  delete from production_bill_of_material where name !='STD';
-  
-  delete from production_object_description;
-  delete from production_prod_process_line;
-  delete from production_prod_process where name !='STD';
-delete from   supplychain_supplychain_batch_used_stock_rules_set;
- delete from stock_stock_rules;
- delete from supplychain_mrp_forecast;
- --delete from studio_app_production;
- delete from purchase_supplier_catalog;
- delete from sale_complementary_product;
- --delete from account_account_management;
- --delete from account_account_management_purchase_tax_set;
- --delete from account_account_management_sale_tax_set;
- delete from bankpayment_bank_statement_rule;
- --delete from account_account_management;
- delete from stock_inventory;
- delete from intervention_equipment_line;
- delete from hr_expense_line;
- delete from base_product_task_template_set;
- delete from stock_freight_carrier_mode;
- --delete from stock_shipment_mode;
- delete from account_move_template_line;
- delete from project_project_project_task_category_set;
- delete from project_project_task_category_project_task_status_set;
- delete from project_task_status_progress_by_category;
- delete from project_project_task_category;
- delete from  base_alternative_barcode;
+-- 5. NOMENCLATURE (BOM) ET PROCESSUS
+UPDATE base_product SET default_bill_of_material = NULL;
+DELETE FROM hr_timesheet_line;
+DELETE FROM production_bill_of_material_line;
+DELETE FROM production_bill_of_material WHERE name != 'STD';
+DELETE FROM production_object_description;
+DELETE FROM production_prod_process_line;
+DELETE FROM production_prod_process WHERE name != 'STD';
+DELETE FROM supplychain_supplychain_batch_used_stock_rules_set;
+DELETE FROM stock_stock_rules;
+DELETE FROM supplychain_mrp_forecast;
+DELETE FROM purchase_supplier_catalog;
+DELETE FROM sale_complementary_product;
+DELETE FROM bankpayment_bank_statement_rule;
+DELETE FROM stock_inventory;
+DELETE FROM intervention_equipment_line;
+DELETE FROM hr_expense_line;
+DELETE FROM stock_freight_carrier_mode;
+DELETE FROM account_move_template_line;
+DELETE FROM project_project_project_task_category_set;
+DELETE FROM project_project_task_category_project_task_status_set;
+DELETE FROM project_task_status_progress_by_category;
+DELETE FROM project_project_task_category;
+DELETE FROM base_alternative_barcode;
+DELETE FROM stock_logistical_form;
+DELETE FROM account_payment_voucher;
+DELETE FROM bankpayment_bank_statement_line_afb120;
 
+-- 6. BANQUE ET PARTENAIRES (Nettoyage partiel initial)
+DELETE FROM bankpayment_bank_order_line_origin;
+DELETE FROM bankpayment_bank_order_line;
+DELETE FROM base_bank_details WHERE PARTNER > 68;
+DELETE FROM base_blocking_company_set;
+DELETE FROM base_blocking WHERE PARTNER > 68;
+DELETE FROM base_partner_address WHERE PARTNER > 68;
+DELETE FROM base_partner_company_set WHERE BASE_PARTNER > 68;
+DELETE FROM base_partner_contact_partner_set WHERE BASE_PARTNER > 68;
 
+-- 7. CRM / EVENTS / RH
+DELETE FROM ical_user;
+DELETE FROM crm_event_reminder;
+DELETE FROM ical_event;
+DELETE FROM crm_opportunity;
+DELETE FROM hr_extra_hours_line;
+DELETE FROM project_project_members_user_set;
+DELETE FROM project_project_project_task_priority_set;
+DELETE FROM project_project_project_task_status_set;
+DELETE FROM project_project;
+DELETE FROM quality_qi_resolution_decision;
+DELETE FROM stock_partner_stock_settings;
+DELETE FROM ical_event_qi_resolution_defaults_set;
+DELETE FROM hr_leave_request;
+DELETE FROM crm_event_reminder;
+DELETE FROM ical_event;
+DELETE FROM base_trace_Back;
+DELETE FROM auth_user_company_set WHERE auth_user > 30;
 
- delete from stock_logistical_form;
+-- Ancienne suppression des users > 30 (on la garde par sécurité)
+UPDATE auth_user SET partner = NULL, employee = NULL WHERE id > 30;
+UPDATE auth_user SET employee = NULL;
+DELETE FROM auth_user WHERE id > 30;
 
- delete from account_payment_voucher;
- --delete from account_accounting_batch;
- delete from bankpayment_bank_statement_line_afb120;
- 
- 
- delete from bankpayment_bank_order_line_origin;
- delete from bankpayment_bank_order_line;
- delete from base_bank_details   where PARTNER>68;
- delete from base_blocking_company_set;
- delete from base_blocking  where PARTNER>68;
- delete from base_partner_address  where PARTNER>68;
- delete from base_partner_company_set  where BASE_PARTNER>68;
- delete from base_partner_contact_partner_set  where BASE_PARTNER>68;
- 
- delete from ical_user;
- delete from crm_event_reminder;
- delete from ical_event;
- delete from crm_opportunity;
- delete from hr_extra_hours_line;
- delete from project_project_members_user_set;
- delete from project_project_project_task_priority_set;
- delete from project_project_project_task_status_set;
- delete from project_project;
- delete from quality_qi_resolution_decision;
- delete from stock_partner_stock_settings;
- delete from ical_event_qi_resolution_defaults_set;
- delete from hr_leave_request;
- delete from crm_event_reminder;
- delete from ical_event;
- delete from  base_trace_Back;
- delete from auth_user_company_set  where auth_user>30;
-  update auth_user set partner=null,employee=null where id>30;
-    update auth_user set employee=null  ;
+DELETE FROM team_team_members WHERE members != 1;
+DELETE FROM quality_qi_analysis_cause_qi_resolution_defaults_set;
+DELETE FROM quality_qi_analysis_cause;
+DELETE FROM sale_configurator_creator_authorized_user_set WHERE authorized_user_set != 1;
+DELETE FROM quality_qi_analysis;
+DELETE FROM intervention_customer_request_equipment_set;
+DELETE FROM intervention_intervention_equipment_set;
+DELETE FROM intervention_intervention;
+DELETE FROM intervention_customer_request;
+DELETE FROM quality_qi_process;
 
-   delete from auth_user  where id>30;
- delete from team_team_members  where members!=1;
- delete from quality_qi_analysis_cause_qi_resolution_defaults_set;
- delete from quality_qi_analysis_cause;
- delete from sale_configurator_creator_authorized_user_set where authorized_user_set!=1;
- delete from quality_qi_analysis;
- delete from intervention_customer_request_equipment_set;
- delete from intervention_intervention_equipment_set;
- delete from intervention_intervention;
- delete from intervention_customer_request;
- delete from quality_qi_process;
- 
- delete from crm_lead;
- delete from fleet_vehicle_fuel_log;
- delete from fleet_vehicle_contract;
- delete from fleet_vehicle;
- --delete from contract_contract;
- delete from intervention_equipment;
- --delete from  base_partner_tag_set  ;
- --delete from  base_partner_contact_partner_set  ;
- update    hr_employment_contract set  employee=null  ;
- delete from  hr_leave_management   ;
- delete from  hr_leave_line   ;
- delete from  hr_timesheet   ;
- delete from  hr_lunch_voucher_mgt_line   ;
- --delete from  hr_employee   ;
- --update  BASE_PRODUCT set default_supplier_partner=null;
- ;
- delete from base_partner_address where partner >68;
+DELETE FROM crm_lead;
+DELETE FROM fleet_vehicle_fuel_log;
+DELETE FROM fleet_vehicle_contract;
+DELETE FROM fleet_vehicle;
+DELETE FROM intervention_equipment;
 
-delete from base_partner_address where partner in(select id from base_partner where   id >68 and  id not in(select partner from account_invoice));
+UPDATE hr_employment_contract SET employee = NULL;
+DELETE FROM hr_leave_management;
+DELETE FROM hr_leave_line;
+DELETE FROM hr_timesheet;
+DELETE FROM hr_lunch_voucher_mgt_line;
 
-delete from base_partner_company_set where base_partner in(select id from base_partner where   id >68 and  id not in(select partner from account_invoice));
+DELETE FROM base_partner_address WHERE partner > 68;
+DELETE FROM base_partner_address WHERE partner IN (SELECT id FROM base_partner WHERE id > 68 AND id NOT IN (SELECT partner FROM account_invoice));
+DELETE FROM base_partner_company_set WHERE base_partner IN (SELECT id FROM base_partner WHERE id > 68 AND id NOT IN (SELECT partner FROM account_invoice));
 
- 
-update base_partner set is_Customer='Y' where   id >68  and is_Customer='N' and is_Supplier='N';
+UPDATE base_partner SET is_Customer = 'Y' WHERE id > 68 AND is_Customer = 'N' AND is_Supplier = 'N';
 
+DELETE FROM helpdesk_ticket;
+DELETE FROM hr_payroll_preparation_other_costs_employee_set;
+DELETE FROM hr_payroll_preparation;
+UPDATE hr_employee SET main_Employment_Contract = NULL;
+DELETE FROM hr_Employment_Contract;
 
- delete from helpdesk_ticket;
- 
-delete from  hr_payroll_preparation_other_costs_employee_set;
-delete from  hr_payroll_preparation;
-update hr_employee set main_Employment_Contract=null;
-delete from hr_Employment_Contract;
+DELETE FROM sale_cart_line;
+DELETE FROM stock_stock_correction;
+DELETE FROM base_Import_History;
 
+-- 8. SUPPRESSION FINALE DES PRODUITS, EMPLOYES ET PARTENAIRES
+DELETE FROM BASE_PRODUCT WHERE code IS NULL;
+DELETE FROM BASE_PRODUCT;
 
+DELETE FROM hr_expense;
+UPDATE auth_user SET partner = NULL, employee = NULL WHERE id > 30;
 
-delete from sale_cart_line;
-delete from stock_stock_correction;
-delete from base_Import_History;
+DELETE FROM hr_employee_batch_set;
+DELETE FROM hr_employee;
 
- delete from BASE_PRODUCT where code is   null  ;
- delete from BASE_PRODUCT    ;
- delete from hr_expense    ;
-   update auth_user set partner=null,employee=null where id>30;
+-- Suppression des partenaires
+DELETE FROM base_partner 
+WHERE id > 68 
+  AND id NOT IN (9007, 9013)
+  AND id NOT IN (SELECT partner FROM account_invoice)
+  AND NOT EXISTS (SELECT 1 FROM account_accounting_situation WHERE base_partner.id = account_accounting_situation.partner);
 
- delete from hr_employee_batch_set    ;
- delete from hr_employee    ;
- 
-   delete from  base_partner where id >68  and id not in(9007, 9013)
-   and  id not in(select partner from account_invoice)
-   and not exists
-   (select 1 from account_accounting_situation  where base_partner.id=account_accounting_situation.partner );
+DELETE FROM base_pricing_line;
+DELETE FROM base_pricing;
+DELETE FROM account_accounting_situation;
+DELETE FROM account_accounting_report_partner_set;
 
- 
- delete from base_pricing_line;
+UPDATE ical_user SET event = NULL;
+DELETE FROM ical_event;
+DELETE FROM ical_user;
+DELETE FROM crm_opportunity;
+DELETE FROM supplychain_mrp_line_origin;
+DELETE FROM supplychain_mrp_line;
 
-delete from base_pricing;
-  delete from account_accounting_situation;
-  delete from account_accounting_report_partner_set;
-  
-  update ical_user set event=null;
-    delete from   ical_event;
+DELETE FROM project_wiki;
+DELETE FROM project_project;
+DELETE FROM account_payment_session_partner_set;
 
-  delete from   ical_user;
-  delete from   crm_opportunity;
-  delete from   supplychain_mrp_line_origin;
-  delete from   supplychain_mrp_line;
+-- Mise à jour finale des produits
+UPDATE base_product SET manag_Price_Coef = 1.35, purchase_Price = sale_Price / 1.35;
 
-  delete from  project_wiki;
-delete from  businesssupport_project_announcement;
-    delete from   project_project;
- delete from   account_payment_session_partner_set;
+-- =====================================================================
+-- 9. 🎯 NOUVEAU BLOC : NETTOYAGE CIBLÉ (Garder Admin, Axelor Company, Axelor Partner)
+-- =====================================================================
 
------------- update base_product set manag_Price_Coef=1.35,purchase_Price=sale_Price/1.35;
- 
+-- A. Nettoyer les liaisons de l'utilisateur Admin (avec les bons noms de colonnes)
+-- Supprime les liaisons pour tous les utilisateurs SAUF l'admin
+DELETE FROM auth_user_company_set WHERE auth_user NOT IN (SELECT id FROM auth_user WHERE code = 'admin');
+
+-- B. Supprimer tous les UTILISATEURS sauf 'admin'
+DELETE FROM auth_user WHERE code != 'admin' AND code IS NOT NULL;
+
+-- C. Supprimer toutes les SOCIÉTÉS sauf 'Axelor'
+DELETE FROM base_company WHERE name != 'Axelor' AND name IS NOT NULL;
+
+-- D. Supprimer tous les TIERS (Partenaires) sauf 'Axelor'
+-- On garde les partenaires liés à l'utilisateur admin s'ils existent pour ne pas casser son profil
+DELETE FROM base_partner 
+WHERE name != 'Axelor' 
+  AND id NOT IN (SELECT partner FROM auth_user WHERE partner IS NOT NULL);
+
+-- =====================================================================
+
+-- 🚀 RÉACTIVATION DES CLÉS ÉTRANGÈRES
+SET session_replication_role = 'origin';
+
+COMMIT;
