@@ -395,3 +395,7 @@ server {
 EOF
 ------
 */
+
+
+docker compose pull backend
+docker compose up -d --force-recreate backend
