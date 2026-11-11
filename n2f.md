@@ -129,6 +129,7 @@ eval: com.axelor.utils.helpers.StringHelper.escapeHtml(transientPassword)
 eval: com.axelor.utils.helpers.StringHelper.escapeHtml(__repo__(User).find(id).transientPassword)
 
 ajouter le role Expense User et role mobile base et mobile hr    a la group HRM
+et perm.mobile.MetaFile.r en Cochez la case Modification (Write).
 //et Timesheet Read:
 //ajpter la permission perm.base.Product.rwcde au role Expense User
 //aussi perm.auth.my,perm.base.company.r
@@ -397,5 +398,31 @@ EOF
 */
 
 
+
+
+
+------------a zero----------------------------
+./restore.sh list  
+Sauvegardes disponibles dans /mnt/data/backups (les plus récentes d'abord) : 2026-11-10_230000 = base avec data demo std all
+ ./restore.sh 2026-11-10_230000 all
+ ----------------------------------------------
+ docker compose exec -T db psql -U sbsoft2026 -d sbsoft2026 -v ON_ERROR_STOP=1 < delete_all.sql
+# 1. Arrêter le conteneur de la base SaaS
+docker compose stop saas-db
+# 2. Vider le dossier de données (ATTENTION : cela supprime tout)
+sudo rm -rf /mnt/data/saas-postgres-data/*
+# 3. Redémarrer le conteneur (il va recréer une base vierge)
+docker compose up -d saas-db
+docker compose exec backend npx prisma migrate reset --force
+docker compose exec backend npx prisma db push
+docker compose restart backend
+
+
+docker compose pull frontend
+docker compose up -d --force-recreate frontend
+
 docker compose pull backend
 docker compose up -d --force-recreate backend
+
+docker compose logs --tail=100 backend
+docker compose logs -f app
