@@ -135,12 +135,11 @@ DELETE FROM hr_leave_request;
 DELETE FROM crm_event_reminder;
 DELETE FROM ical_event;
 DELETE FROM base_trace_Back;
-DELETE FROM auth_user_company_set WHERE auth_user > 30;
+DELETE FROM auth_user_company_set WHERE auth_user NOT IN (SELECT id FROM auth_user WHERE code = 'admin');
 
--- Ancienne suppression des users > 30 (on la garde par sécurité)
-UPDATE auth_user SET partner = NULL, employee = NULL WHERE id > 30;
-UPDATE auth_user SET employee = NULL;
-DELETE FROM auth_user WHERE id > 30;
+-- 🛡️ PROTECTION : Mise à jour des utilisateurs SAUF admin
+UPDATE auth_user SET partner = NULL, employee = NULL WHERE code != 'admin' AND code IS NOT NULL;
+DELETE FROM auth_user WHERE code != 'admin' AND code IS NOT NULL;
 
 DELETE FROM team_team_members WHERE members != 1;
 DELETE FROM quality_qi_analysis_cause_qi_resolution_defaults_set;
@@ -159,7 +158,9 @@ DELETE FROM fleet_vehicle_contract;
 DELETE FROM fleet_vehicle;
 DELETE FROM intervention_equipment;
 
-UPDATE hr_employment_contract SET employee = NULL;
+UPDATE hr_employment_contract SET employee = NULL WHERE NOT EXISTS (
+    SELECT 1 FROM hr_employee e JOIN auth_user u ON u.employee = e.id WHERE u.code = 'admin' AND e.main_Employment_Contract = hr_employment_contract.id
+);
 DELETE FROM hr_leave_management;
 DELETE FROM hr_leave_line;
 DELETE FROM hr_timesheet;
@@ -174,8 +175,20 @@ UPDATE base_partner SET is_Customer = 'Y' WHERE id > 68 AND is_Customer = 'N' AN
 DELETE FROM helpdesk_ticket;
 DELETE FROM hr_payroll_preparation_other_costs_employee_set;
 DELETE FROM hr_payroll_preparation;
-UPDATE hr_employee SET main_Employment_Contract = NULL;
-DELETE FROM hr_Employment_Contract;
+
+-- 🛡️ PROTECTION : Mise à jour du contrat principal SAUF pour l'admin
+UPDATE hr_employee SET main_Employment_Contract = NULL 
+WHERE NOT EXISTS (
+    SELECT 1 FROM auth_user u WHERE u.code = 'admin' AND u.employee = hr_employee.id
+);
+
+-- 🛡️ PROTECTION : Suppression des contrats SAUF celui de l'admin
+DELETE FROM hr_Employment_Contract 
+WHERE NOT EXISTS (
+    SELECT 1 FROM hr_employee e 
+    JOIN auth_user u ON u.employee = e.id 
+    WHERE u.code = 'admin' AND e.main_Employment_Contract = hr_Employment_Contract.id
+);
 
 DELETE FROM sale_cart_line;
 DELETE FROM stock_stock_correction;
@@ -186,10 +199,14 @@ DELETE FROM BASE_PRODUCT WHERE code IS NULL;
 DELETE FROM BASE_PRODUCT;
 
 DELETE FROM hr_expense;
-UPDATE auth_user SET partner = NULL, employee = NULL WHERE id > 30;
 
 DELETE FROM hr_employee_batch_set;
-DELETE FROM hr_employee;
+
+-- 🛡️ PROTECTION : Suppression des employés SAUF celui de l'admin
+DELETE FROM hr_employee 
+WHERE NOT EXISTS (
+    SELECT 1 FROM auth_user u WHERE u.code = 'admin' AND u.employee = hr_employee.id
+);
 
 -- Suppression des partenaires
 DELETE FROM base_partner 
@@ -221,8 +238,7 @@ UPDATE base_product SET manag_Price_Coef = 1.35, purchase_Price = sale_Price / 1
 -- 9. 🎯 NOUVEAU BLOC : NETTOYAGE CIBLÉ (Garder Admin, Axelor Company, Axelor Partner)
 -- =====================================================================
 
--- A. Nettoyer les liaisons de l'utilisateur Admin (avec les bons noms de colonnes)
--- Supprime les liaisons pour tous les utilisateurs SAUF l'admin
+-- A. Nettoyer les liaisons de l'utilisateur Admin
 DELETE FROM auth_user_company_set WHERE auth_user NOT IN (SELECT id FROM auth_user WHERE code = 'admin');
 
 -- B. Supprimer tous les UTILISATEURS sauf 'admin'
@@ -232,7 +248,7 @@ DELETE FROM auth_user WHERE code != 'admin' AND code IS NOT NULL;
 DELETE FROM base_company WHERE name != 'Axelor' AND name IS NOT NULL;
 
 -- D. Supprimer tous les TIERS (Partenaires) sauf 'Axelor'
--- On garde les partenaires liés à l'utilisateur admin s'ils existent pour ne pas casser son profil
+-- 🛡️ On garde le partenaire lié à l'utilisateur admin
 DELETE FROM base_partner 
 WHERE name != 'Axelor' 
   AND id NOT IN (SELECT partner FROM auth_user WHERE partner IS NOT NULL);
