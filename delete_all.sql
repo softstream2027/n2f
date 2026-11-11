@@ -96,7 +96,6 @@ DELETE FROM sale_complementary_product;
 DELETE FROM bankpayment_bank_statement_rule;
 DELETE FROM stock_inventory;
 DELETE FROM intervention_equipment_line;
-DELETE FROM hr_expense_line;
 DELETE FROM stock_freight_carrier_mode;
 DELETE FROM account_move_template_line;
 DELETE FROM project_project_project_task_category_set;
@@ -195,24 +194,27 @@ DELETE FROM stock_stock_correction;
 DELETE FROM base_Import_History;
 
 -- 8. SUPPRESSION FINALE DES PRODUITS, EMPLOYES ET PARTENAIRES
-DELETE FROM BASE_PRODUCT WHERE code IS NULL;
-DELETE FROM BASE_PRODUCT;
-
-DELETE FROM hr_expense;
+-- 🛡️ PROTECTION : Suppression des articles SAUF ceux en NDF-% et ceux liés aux notes de frais
+DELETE FROM BASE_PRODUCT 
+WHERE code NOT LIKE 'NDF-%' 
+  AND id NOT IN (SELECT product FROM hr_expense_line WHERE product IS NOT NULL);
 
 DELETE FROM hr_employee_batch_set;
 
--- 🛡️ PROTECTION : Suppression des employés SAUF celui de l'admin
+-- 🛡️ PROTECTION : Suppression des employés SAUF l'admin ET ceux qui ont des notes de frais
 DELETE FROM hr_employee 
-WHERE NOT EXISTS (
-    SELECT 1 FROM auth_user u WHERE u.code = 'admin' AND u.employee = hr_employee.id
-);
+WHERE id NOT IN (SELECT employee FROM hr_expense WHERE employee IS NOT NULL)
+  AND NOT EXISTS (SELECT 1 FROM auth_user u WHERE u.code = 'admin' AND u.employee = hr_employee.id);
 
--- Suppression des partenaires
+-- 🛡️ PROTECTION : Suppression des partenaires (on garde ceux liés aux notes de frais via l'employé)
 DELETE FROM base_partner 
 WHERE id > 68 
   AND id NOT IN (9007, 9013)
   AND id NOT IN (SELECT partner FROM account_invoice)
+  AND id NOT IN (
+      SELECT contact_partner FROM hr_employee 
+      WHERE id IN (SELECT employee FROM hr_expense WHERE employee IS NOT NULL)
+  )
   AND NOT EXISTS (SELECT 1 FROM account_accounting_situation WHERE base_partner.id = account_accounting_situation.partner);
 
 DELETE FROM base_pricing_line;
@@ -231,11 +233,12 @@ DELETE FROM project_wiki;
 DELETE FROM project_project;
 DELETE FROM account_payment_session_partner_set;
 
--- Mise à jour finale des produits
-UPDATE base_product SET manag_Price_Coef = 1.35, purchase_Price = sale_Price / 1.35;
+-- Mise à jour finale des produits (on ne touche pas aux NDF pour ne pas modifier leurs prix)
+UPDATE base_product SET manag_Price_Coef = 1.35, purchase_Price = sale_Price / 1.35
+WHERE code NOT LIKE 'NDF-%';
 
 -- =====================================================================
--- 9. 🎯 NOUVEAU BLOC : NETTOYAGE CIBLÉ (Garder Admin, Axelor Company, Axelor Partner)
+-- 9. 🎯 NETTOYAGE CIBLÉ (Garder Admin, Axelor Company, Axelor Partner)
 -- =====================================================================
 
 -- A. Nettoyer les liaisons de l'utilisateur Admin
@@ -244,14 +247,19 @@ DELETE FROM auth_user_company_set WHERE auth_user NOT IN (SELECT id FROM auth_us
 -- B. Supprimer tous les UTILISATEURS sauf 'admin'
 DELETE FROM auth_user WHERE code != 'admin' AND code IS NOT NULL;
 
--- C. Supprimer toutes les SOCIÉTÉS sauf 'Axelor'
-DELETE FROM base_company WHERE name != 'Axelor' AND name IS NOT NULL;
+-- C. Supprimer toutes les SOCIÉTÉS sauf 'Axelor' ET celles liées aux notes de frais
+DELETE FROM base_company 
+WHERE name != 'Axelor' 
+  AND id NOT IN (SELECT company FROM hr_expense WHERE company IS NOT NULL);
 
 -- D. Supprimer tous les TIERS (Partenaires) sauf 'Axelor'
--- 🛡️ On garde le partenaire lié à l'utilisateur admin
 DELETE FROM base_partner 
 WHERE name != 'Axelor' 
-  AND id NOT IN (SELECT partner FROM auth_user WHERE partner IS NOT NULL);
+  AND id NOT IN (SELECT partner FROM auth_user WHERE partner IS NOT NULL)
+  AND id NOT IN (
+      SELECT contact_partner FROM hr_employee 
+      WHERE id IN (SELECT employee FROM hr_expense WHERE employee IS NOT NULL)
+  );
 
 -- =====================================================================
 
