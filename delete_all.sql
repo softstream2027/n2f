@@ -257,6 +257,7 @@ DELETE from account_account_default_tax_set where account_account   in (select i
 
  DELETE from account_account_management_sale_tax_set where account_account_management   in (select id from account_account_management where Company != 1);
 
+ DELETE from account_account_management_purchase_tax_set where account_account_management   in (select id from account_account_management where Company != 1);
 
 
 DELETE FROM account_Account_Management where Company != 1;
