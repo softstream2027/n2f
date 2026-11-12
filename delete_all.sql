@@ -256,7 +256,13 @@ SET session_replication_role = 'origin';
 DELETE from account_account_default_tax_set where account_account   in (select id from account_account where Company != 1);
 
 
+
+DELETE FROM accountAccount_Management where Company != 1;
+
+DELETE FROM account_account_config where Company != 1;
+
 DELETE FROM account_account where Company != 1;
- 
+
+
 
 COMMIT;
