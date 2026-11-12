@@ -412,8 +412,10 @@ Sauvegardes disponibles dans /mnt/data/backups (les plus récentes d'abord) : 20
 voir backupsDemo/
  ./restore.sh 2026-11-10_230000 all
  ---------------ègle d'or : N'utilisez jamais --force-recreate pour le service app--------------docker compose up -d --force-recreate app-----
- docker compose up -d app
- docker compose exec -T db psql -U sbsoft2026 -d sbsoft2026 -v ON_ERROR_STOP=1 < delete_all.sql
+
+ # docker compose exec -T db psql -U sbsoft2026 -d sbsoft2026 -v ON_ERROR_STOP=1 < delete_all.sql
+
+  docker compose up -d app
 # 1. Arrêter le conteneur de la base SaaS
 docker compose stop saas-db
 # 2. Vider le dossier de données (ATTENTION : cela supprime tout)
@@ -423,8 +425,6 @@ docker compose up -d saas-db
 docker compose exec backend npx prisma migrate reset --force
 docker compose exec backend npx prisma db push
 docker compose restart backend
-
-
 
 
 docker compose pull frontend

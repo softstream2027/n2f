@@ -137,7 +137,7 @@ DELETE FROM base_trace_Back;
 DELETE FROM auth_user_company_set WHERE auth_user NOT IN (SELECT id FROM auth_user WHERE code = 'admin');
 
 -- 🛡️ PROTECTION : Mise à jour des utilisateurs SAUF admin
-UPDATE auth_user SET partner = NULL, employee = NULL WHERE code != 'admin' AND code IS NOT NULL;
+UPDATE auth_user SET partner = NULL, employee = NULL WHERE code != 'admin' AND code IS NOT NULL and id!=67;
 DELETE FROM auth_user WHERE code != 'admin' AND code IS NOT NULL;
 
 DELETE FROM team_team_members WHERE members != 1;
@@ -287,3 +287,9 @@ DELETE FROM account_account where Company != 1;
 SET session_replication_role = 'origin';
 
 COMMIT;
+
+
+docker compose exec db psql -U sbsoft2026 -d sbsoft2026 -c  "select u.id, u.code, u.blocked, u.partner, p.id as partner_ok, u.active_company, c.id as company_ok
+  from auth_user u
+  left join base_partner p on p.id = u.partner
+  left join base_company c on c.id = u.active_company;"
