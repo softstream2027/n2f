@@ -249,8 +249,7 @@ DELETE FROM auth_user WHERE code != 'admin' AND code IS NOT NULL;
 
 -- C. Supprimer toutes les SOCIÉTÉS sauf 'Axelor' ET celles liées aux notes de frais
 DELETE FROM base_company 
-WHERE name != 'Axelor' 
-  AND id NOT IN (SELECT company FROM hr_expense WHERE company IS NOT NULL);
+WHERE name != 'Axelor'  ;
 
 -- D. Supprimer tous les TIERS (Partenaires) sauf 'Axelor'
 DELETE FROM base_partner 
