@@ -132,6 +132,8 @@ Dans le champ "Valeur Expr." de cette fenêtre, remplacez tout le texte par ceci
 eval: com.axelor.utils.helpers.StringHelper.escapeHtml(transientPassword)
 eval: com.axelor.utils.helpers.StringHelper.escapeHtml(__repo__(User).find(id).transientPassword)
 
+il faut creer l'employee avec leur responsable employer pour pouvoir consulter tous les donne des autre user de meme societer
+
 ajouter le role Expense User et role mobile base et mobile hr    a la group HRM
 retirer le role role.mobile.hr de group !!! securiter
 et perm.mobile.MetaFile.r en Cochez la case Modification (Write).
