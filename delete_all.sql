@@ -248,10 +248,6 @@ WHERE name != 'Axelor'  ;
 DELETE FROM base_partner 
 WHERE name != 'Axelor'  ;
 
--- =====================================================================
-
--- 🚀 RÉACTIVATION DES CLÉS ÉTRANGÈRES
-SET session_replication_role = 'origin';
 
 DELETE from account_account_default_tax_set where account_account   in (select id from account_account where Company != 1);
 
@@ -285,5 +281,9 @@ DELETE FROM account_account_config where Company != 1;
 DELETE FROM account_account where Company != 1;
 
 
+-- =====================================================================
+
+-- 🚀 RÉACTIVATION DES CLÉS ÉTRANGÈRES
+SET session_replication_role = 'origin';
 
 COMMIT;

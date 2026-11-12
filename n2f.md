@@ -120,6 +120,10 @@ docker compose logs -f app
 docker compose logs db
 docker compose logs -f
 
+3. Planifier chaque nuit à 2h
+crontab -e
+0 2 * * * /mnt/data/n2f/backup.sh >> /mnt/data/backups/backup.log 2>&1
+
 activer email smtp dasn axelor : Compte par défaut Compte par défaut ssl smtp.gmail.com
 importer les roles dans gestion des appllications
 
@@ -342,7 +346,8 @@ sudo certbot --nginx -d saas-taysirflow.duckdns.org -d api-taysirflow.duckdns.or
 ou bien:
 -------------------------en cas de souci-----------------------------
 docker buildx build --build-arg AOS_VERSION=v8.4.8 -t n2f:v1.0.0 --load .
-docker compose up -d --force-recreate app
+Règle d'or : N'utilisez jamais --force-recreate pour le service app sur une base de données  docker compose up -d --force-recreate app
+docker compose up -d app
 docker exec n2f-app /home/axelor/tomcat/bin/version.sh | head -3
 ------------------------------------------------------
 
@@ -404,8 +409,10 @@ EOF
 ------------a zero----------------------------
 ./restore.sh list  
 Sauvegardes disponibles dans /mnt/data/backups (les plus récentes d'abord) : 2026-11-10_230000 = base avec data demo std all
+voir backupsDemo/
  ./restore.sh 2026-11-10_230000 all
- ----------------------------------------------
+ ---------------ègle d'or : N'utilisez jamais --force-recreate pour le service app--------------docker compose up -d --force-recreate app-----
+ docker compose up -d app
  docker compose exec -T db psql -U sbsoft2026 -d sbsoft2026 -v ON_ERROR_STOP=1 < delete_all.sql
 # 1. Arrêter le conteneur de la base SaaS
 docker compose stop saas-db
@@ -416,6 +423,8 @@ docker compose up -d saas-db
 docker compose exec backend npx prisma migrate reset --force
 docker compose exec backend npx prisma db push
 docker compose restart backend
+
+
 
 
 docker compose pull frontend
