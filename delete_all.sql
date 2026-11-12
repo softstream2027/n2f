@@ -262,7 +262,7 @@ DELETE from account_account_default_tax_set where account_account   in (select i
 
 DELETE FROM account_Account_Management where Company != 1;
 
-DELETE FROM from account_account_config_move_on_temp_closure_authorized_role_lis where account_account_config   in (select id from account_account_config where Company != 1);
+DELETE FROM   account_account_config_move_on_temp_closure_authorized_role_lis where account_account_config   in (select id from account_account_config where Company != 1);
 
 
 DELETE FROM account_account_config where Company != 1;
