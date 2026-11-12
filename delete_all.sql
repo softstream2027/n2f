@@ -255,8 +255,7 @@ SET session_replication_role = 'origin';
 
 DELETE from account_account_default_tax_set where account_account   in (select id from account_account where Company != 1);
 
-select * from account_account_management_sale_tax_set where 1=2;
-DELETE from account_account_management_sale_tax_set where account_account   in (select id from account_account where Company != 1);
+ DELETE from account_account_management_sale_tax_set where account_account_management   in (select id from account_account_management where Company != 1);
 
 
 
