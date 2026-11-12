@@ -133,7 +133,10 @@ eval: com.axelor.utils.helpers.StringHelper.escapeHtml(transientPassword)
 eval: com.axelor.utils.helpers.StringHelper.escapeHtml(__repo__(User).find(id).transientPassword)
 
 ajouter le role Expense User et role mobile base et mobile hr    a la group HRM
+retirer le role role.mobile.hr de group !!! securiter
 et perm.mobile.MetaFile.r en Cochez la case Modification (Write).
+com.axelor.meta.db.MetaTheme
+il faut bien setter les colonne dasn     com.axelor.apps.hr.db.HRConfig impression expense NF
 //et Timesheet Read:
 //ajpter la permission perm.base.Product.rwcde au role Expense User
 //aussi perm.auth.my,perm.base.company.r
@@ -411,10 +414,12 @@ EOF
 Sauvegardes disponibles dans /mnt/data/backups (les plus récentes d'abord) : 2026-11-10_230000 = base avec data demo std all
 voir backupsDemo/
  ./restore.sh 2026-11-10_230000 all
+ 
  ---------------ègle d'or : N'utilisez jamais --force-recreate pour le service app--------------docker compose up -d --force-recreate app-----
 
- # docker compose exec -T db psql -U sbsoft2026 -d sbsoft2026 -v ON_ERROR_STOP=1 < delete_all.sql
-
+ # 
+ docker compose exec -T db psql -U sbsoft2026 -d sbsoft2026 -v ON_ERROR_STOP=1 < delete_all.sql
+docker compose up -d --force-recreate app
   docker compose up -d app
 # 1. Arrêter le conteneur de la base SaaS
 docker compose stop saas-db
@@ -434,4 +439,6 @@ docker compose pull backend
 docker compose up -d --force-recreate backend
 
 docker compose logs --tail=100 backend
+
+docker compose up -d --force-recreate app
 docker compose logs -f app
