@@ -203,19 +203,12 @@ DELETE FROM hr_employee_batch_set;
 
 -- 🛡️ PROTECTION : Suppression des employés SAUF l'admin ET ceux qui ont des notes de frais
 DELETE FROM hr_employee 
-WHERE id NOT IN (SELECT employee FROM hr_expense WHERE employee IS NOT NULL)
-  AND NOT EXISTS (SELECT 1 FROM auth_user u WHERE u.code = 'admin' AND u.employee = hr_employee.id);
+WHERE   NOT EXISTS (SELECT 1 FROM auth_user u WHERE u.code = 'admin' AND u.employee = hr_employee.id);
 
 -- 🛡️ PROTECTION : Suppression des partenaires (on garde ceux liés aux notes de frais via l'employé)
 DELETE FROM base_partner 
 WHERE id > 68 
-  AND id NOT IN (9007, 9013)
-  AND id NOT IN (SELECT partner FROM account_invoice)
-  AND id NOT IN (
-      SELECT contact_partner FROM hr_employee 
-      WHERE id IN (SELECT employee FROM hr_expense WHERE employee IS NOT NULL)
-  )
-  AND NOT EXISTS (SELECT 1 FROM account_accounting_situation WHERE base_partner.id = account_accounting_situation.partner);
+  AND id NOT IN (9007, 9013) ;
 
 DELETE FROM base_pricing_line;
 DELETE FROM base_pricing;
@@ -253,12 +246,7 @@ WHERE name != 'Axelor'  ;
 
 -- D. Supprimer tous les TIERS (Partenaires) sauf 'Axelor'
 DELETE FROM base_partner 
-WHERE name != 'Axelor' 
-  AND id NOT IN (SELECT partner FROM auth_user WHERE partner IS NOT NULL)
-  AND id NOT IN (
-      SELECT contact_partner FROM hr_employee 
-      WHERE id IN (SELECT employee FROM hr_expense WHERE employee IS NOT NULL)
-  );
+WHERE name != 'Axelor'  ;
 
 -- =====================================================================
 
