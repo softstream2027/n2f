@@ -265,8 +265,7 @@ DELETE FROM account_Account_Management where Company != 1;
 DELETE FROM   account_account_config_move_on_temp_closure_authorized_role_lis where account_account_config   in (select id from account_account_config where Company != 1);
 DELETE FROM   account_account_config_closure_authorized_role_list where account_account_config   in (select id from account_account_config where Company != 1);
 DELETE FROM   account_account_config_clearance_account_set where account_account_config   in (select id from account_account_config where Company != 1);
-select * from account_invoice_product_statement where 1=2;
-DELETE FROM   account_invoice_product_statement where account_account_config   in (select id from account_account_config where Company != 1);
+ DELETE FROM   account_invoice_product_statement where  account_config   in (select id from account_account_config where Company != 1);
 
 
 
