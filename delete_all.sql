@@ -257,7 +257,7 @@ DELETE from account_account_default_tax_set where account_account   in (select i
 
 
 
-DELETE FROM accountAccount_Management where Company != 1;
+DELETE FROM account_Account_Management where Company != 1;
 
 DELETE FROM account_account_config where Company != 1;
 
