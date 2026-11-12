@@ -271,7 +271,7 @@ DELETE FROM   account_account_config_temporary_closure_authorized_role_list wher
 
 
 DELETE FROM account_account_config where Company != 1;
-
+select * from account_journal_valid_account_set where 1=2;
 DELETE FROM  account_journal_valid_account_set where account_account  in (select id from account_account where Company != 1);
 
 DELETE FROM account_account where Company != 1;
