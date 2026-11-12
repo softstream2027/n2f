@@ -277,6 +277,10 @@ DELETE FROM account_account_config where Company != 1;
   DELETE FROM  account_account_equiv where from_account  in (select id from account_account where Company != 1);
   DELETE FROM  account_account_equiv where to_account  in (select id from account_account where Company != 1);
 
+  DELETE FROM  account_account_compatible_account_set where compatible_account_set  in (select id from account_account where Company != 1);
+
+
+
 
 DELETE FROM account_account where Company != 1;
 
