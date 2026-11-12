@@ -1,11 +1,42 @@
+-- =====================================================================
+-- NETTOYAGE DE LA BASE AXELOR : version finale
+-- Conserve : l'utilisateur admin (et son tiers / employé), la société Axelor
+--            (et son tiers), et le compte technique du SaaS backend.
+-- Lancer avec :  docker compose exec -T db psql -U sbsoft2026 -d sbsoft2026 -v ON_ERROR_STOP=1 < cleanup_axelor.sql
+-- Tout est dans UNE transaction : à la moindre erreur ou vérification qui échoue, RIEN n'est modifié.
+-- Pour un essai à blanc, remplacez le COMMIT final par ROLLBACK.
+-- =====================================================================
 BEGIN;
 
--- 🚀 DÉSACTIVATION TEMPORAIRE DES CLÉS ÉTRANGÈRES POUR PERMETTRE LE NETTOYAGE MASSIF
+-- ---------------------------------------------------------------------
+-- 0. CE QU'ON CONSERVE (calculé AVANT toute suppression)
+-- ---------------------------------------------------------------------
+-- ⚠ Mettez ici le login du compte technique utilisé par le backend (AXELOR_USERNAME)
+CREATE TEMP TABLE keep_users ON COMMIT DROP AS
+  SELECT id FROM auth_user WHERE code IN ('admin', 'saas-provisioner');
+
+CREATE TEMP TABLE keep_companies ON COMMIT DROP AS
+  SELECT id FROM base_company
+  WHERE name = 'Axelor'
+     OR id IN (SELECT active_company FROM auth_user WHERE id IN (SELECT id FROM keep_users) AND active_company IS NOT NULL);
+
+CREATE TEMP TABLE keep_partners ON COMMIT DROP AS
+  SELECT id FROM base_partner
+  WHERE name = 'Axelor'
+     OR id IN (SELECT partner FROM auth_user WHERE id IN (SELECT id FROM keep_users) AND partner IS NOT NULL)
+     OR id IN (SELECT partner FROM base_company WHERE id IN (SELECT id FROM keep_companies) AND partner IS NOT NULL);
+
+CREATE TEMP TABLE keep_employees ON COMMIT DROP AS
+  SELECT employee AS id FROM auth_user WHERE id IN (SELECT id FROM keep_users) AND employee IS NOT NULL;
+
+-- Désactivation temporaire des clés étrangères pour le nettoyage massif
 SET session_replication_role = 'replica';
 
--- 1. NETTOYAGE DES TABLES LIEES AUX PRODUITS / VARIANTES
+-- ---------------------------------------------------------------------
+-- 1. PRODUITS / VARIANTES
+-- ---------------------------------------------------------------------
 DELETE FROM account_tax_line WHERE end_date IS NOT NULL;
-UPDATE base_Product SET default_Supplier_Partner = NULL;
+UPDATE base_product SET default_supplier_partner = NULL;
 
 DELETE FROM base_product_variant_config_product_variant_value1set;
 DELETE FROM base_product_variant_config_product_variant_value2set;
@@ -17,14 +48,16 @@ DELETE FROM supplychain_mrp_product_set;
 DELETE FROM account_reconcile_payment_move_line_distribution_list;
 DELETE FROM account_payment_move_line_distribution;
 
--- 2. NETTOYAGE COMPTABLE (Factures, Écritures, Paiements)
+-- ---------------------------------------------------------------------
+-- 2. COMPTABILITÉ (factures, écritures, paiements)
+-- ---------------------------------------------------------------------
 DELETE FROM account_pay_voucher_due_element;
 DELETE FROM account_pay_voucher_element_to_pay;
 UPDATE account_move SET payment_voucher = NULL;
 DELETE FROM account_payment_voucher;
 
 DELETE FROM account_invoice_line_tax_line_set;
-DELETE FROM ACCOUNT_INVOICE_line;
+DELETE FROM account_invoice_line;
 DELETE FROM account_invoice_term_payment_reconcile_list;
 DELETE FROM account_invoice_term_payment;
 DELETE FROM account_invoice_term;
@@ -36,7 +69,9 @@ DELETE FROM account_invoice_payment;
 DELETE FROM account_move;
 DELETE FROM account_invoice_stock_move_set;
 
+-- ---------------------------------------------------------------------
 -- 3. PRODUCTION / PROJETS / TEMPS
+-- ---------------------------------------------------------------------
 DELETE FROM production_temp_bom_tree;
 DELETE FROM project_project_task_tag_set;
 DELETE FROM hr_timesheet_line;
@@ -45,7 +80,9 @@ DELETE FROM project_project_task_timer_list;
 DELETE FROM project_project_planning_time;
 DELETE FROM project_project_task;
 
--- 4. VENTES ET ACHATS (Stock et commandes)
+-- ---------------------------------------------------------------------
+-- 4. VENTES, ACHATS, STOCK
+-- ---------------------------------------------------------------------
 DELETE FROM stock_inventory_line;
 DELETE FROM stock_stock_location_line_history;
 DELETE FROM stock_stock_location_line;
@@ -74,15 +111,16 @@ DELETE FROM sale_sale_order_line;
 DELETE FROM sale_sale_order_line_tax;
 DELETE FROM production_production_order;
 
-DELETE FROM SALE_SALE_ORDER;
+DELETE FROM sale_sale_order;
 DELETE FROM purchase_purchase_order_line_tax_line_set;
 DELETE FROM purchase_purchase_order_line;
 DELETE FROM purchase_purchase_order_line_tax;
-DELETE FROM PURCHASE_PURCHASE_ORDER;
+DELETE FROM purchase_purchase_order;
 
--- 5. NOMENCLATURE (BOM) ET PROCESSUS
+-- ---------------------------------------------------------------------
+-- 5. NOMENCLATURES (BOM) ET PROCESSUS
+-- ---------------------------------------------------------------------
 UPDATE base_product SET default_bill_of_material = NULL;
-DELETE FROM hr_timesheet_line;
 DELETE FROM production_bill_of_material_line;
 DELETE FROM production_bill_of_material WHERE name != 'STD';
 DELETE FROM production_object_description;
@@ -104,20 +142,23 @@ DELETE FROM project_task_status_progress_by_category;
 DELETE FROM project_project_task_category;
 DELETE FROM base_alternative_barcode;
 DELETE FROM stock_logistical_form;
-DELETE FROM account_payment_voucher;
 DELETE FROM bankpayment_bank_statement_line_afb120;
 
--- 6. BANQUE ET PARTENAIRES (Nettoyage partiel initial)
+-- ---------------------------------------------------------------------
+-- 6. BANQUE ET LIAISONS DES TIERS (tout sauf les tiers conservés)
+-- ---------------------------------------------------------------------
 DELETE FROM bankpayment_bank_order_line_origin;
 DELETE FROM bankpayment_bank_order_line;
-DELETE FROM base_bank_details WHERE PARTNER > 68;
+DELETE FROM base_bank_details WHERE partner NOT IN (SELECT id FROM keep_partners);
 DELETE FROM base_blocking_company_set;
-DELETE FROM base_blocking WHERE PARTNER > 68;
-DELETE FROM base_partner_address WHERE PARTNER > 68;
-DELETE FROM base_partner_company_set WHERE BASE_PARTNER > 68;
-DELETE FROM base_partner_contact_partner_set WHERE BASE_PARTNER > 68;
+DELETE FROM base_blocking WHERE partner NOT IN (SELECT id FROM keep_partners);
+DELETE FROM base_partner_address WHERE partner NOT IN (SELECT id FROM keep_partners);
+DELETE FROM base_partner_company_set WHERE base_partner NOT IN (SELECT id FROM keep_partners);
+DELETE FROM base_partner_contact_partner_set WHERE base_partner NOT IN (SELECT id FROM keep_partners);
 
--- 7. CRM / EVENTS / RH
+-- ---------------------------------------------------------------------
+-- 7. CRM / ÉVÉNEMENTS / RH
+-- ---------------------------------------------------------------------
 DELETE FROM ical_user;
 DELETE FROM crm_event_reminder;
 DELETE FROM ical_event;
@@ -131,19 +172,17 @@ DELETE FROM quality_qi_resolution_decision;
 DELETE FROM stock_partner_stock_settings;
 DELETE FROM ical_event_qi_resolution_defaults_set;
 DELETE FROM hr_leave_request;
-DELETE FROM crm_event_reminder;
-DELETE FROM ical_event;
-DELETE FROM base_trace_Back;
-DELETE FROM auth_user_company_set WHERE auth_user NOT IN (SELECT id FROM auth_user WHERE code = 'admin');
+DELETE FROM base_trace_back;
 
--- 🛡️ PROTECTION : Mise à jour des utilisateurs SAUF admin
-UPDATE auth_user SET partner = NULL, employee = NULL WHERE code != 'admin' AND code IS NOT NULL and id!=67;
-DELETE FROM auth_user WHERE code != 'admin' AND code IS NOT NULL;
+-- Utilisateurs : on détache puis on supprime tous sauf admin et le compte technique
+UPDATE auth_user SET partner = NULL, employee = NULL WHERE id NOT IN (SELECT id FROM keep_users);
+DELETE FROM auth_user_company_set WHERE auth_user NOT IN (SELECT id FROM keep_users);
+DELETE FROM auth_user WHERE id NOT IN (SELECT id FROM keep_users);
 
-DELETE FROM team_team_members WHERE members != 1;
+DELETE FROM team_team_members WHERE members NOT IN (SELECT id FROM keep_users);
 DELETE FROM quality_qi_analysis_cause_qi_resolution_defaults_set;
 DELETE FROM quality_qi_analysis_cause;
-DELETE FROM sale_configurator_creator_authorized_user_set WHERE authorized_user_set != 1;
+DELETE FROM sale_configurator_creator_authorized_user_set WHERE authorized_user_set NOT IN (SELECT id FROM keep_users);
 DELETE FROM quality_qi_analysis;
 DELETE FROM intervention_customer_request_equipment_set;
 DELETE FROM intervention_intervention_equipment_set;
@@ -158,57 +197,38 @@ DELETE FROM fleet_vehicle;
 DELETE FROM intervention_equipment;
 
 UPDATE hr_employment_contract SET employee = NULL WHERE NOT EXISTS (
-    SELECT 1 FROM hr_employee e JOIN auth_user u ON u.employee = e.id WHERE u.code = 'admin' AND e.main_Employment_Contract = hr_employment_contract.id
+  SELECT 1 FROM hr_employee e
+  WHERE e.id IN (SELECT id FROM keep_employees) AND e.main_employment_contract = hr_employment_contract.id
 );
 DELETE FROM hr_leave_management;
 DELETE FROM hr_leave_line;
 DELETE FROM hr_timesheet;
 DELETE FROM hr_lunch_voucher_mgt_line;
 
-DELETE FROM base_partner_address WHERE partner > 68;
-DELETE FROM base_partner_address WHERE partner IN (SELECT id FROM base_partner WHERE id > 68 AND id NOT IN (SELECT partner FROM account_invoice));
-DELETE FROM base_partner_company_set WHERE base_partner IN (SELECT id FROM base_partner WHERE id > 68 AND id NOT IN (SELECT partner FROM account_invoice));
-
-UPDATE base_partner SET is_Customer = 'Y' WHERE id > 68 AND is_Customer = 'N' AND is_Supplier = 'N';
-
 DELETE FROM helpdesk_ticket;
 DELETE FROM hr_payroll_preparation_other_costs_employee_set;
 DELETE FROM hr_payroll_preparation;
 
--- 🛡️ PROTECTION : Mise à jour du contrat principal SAUF pour l'admin
-UPDATE hr_employee SET main_Employment_Contract = NULL 
-WHERE NOT EXISTS (
-    SELECT 1 FROM auth_user u WHERE u.code = 'admin' AND u.employee = hr_employee.id
-);
-
--- 🛡️ PROTECTION : Suppression des contrats SAUF celui de l'admin
-DELETE FROM hr_Employment_Contract 
-WHERE NOT EXISTS (
-    SELECT 1 FROM hr_employee e 
-    JOIN auth_user u ON u.employee = e.id 
-    WHERE u.code = 'admin' AND e.main_Employment_Contract = hr_Employment_Contract.id
+-- Contrat principal : on garde uniquement celui des employés conservés
+UPDATE hr_employee SET main_employment_contract = NULL WHERE id NOT IN (SELECT id FROM keep_employees);
+DELETE FROM hr_employment_contract WHERE NOT EXISTS (
+  SELECT 1 FROM hr_employee e
+  WHERE e.id IN (SELECT id FROM keep_employees) AND e.main_employment_contract = hr_employment_contract.id
 );
 
 DELETE FROM sale_cart_line;
 DELETE FROM stock_stock_correction;
-DELETE FROM base_Import_History;
+DELETE FROM base_import_history;
 
--- 8. SUPPRESSION FINALE DES PRODUITS, EMPLOYES ET PARTENAIRES
--- 🛡️ PROTECTION : Suppression des articles SAUF ceux en NDF-% et ceux liés aux notes de frais
-DELETE FROM BASE_PRODUCT 
-WHERE code NOT LIKE 'NDF-%' 
+-- ---------------------------------------------------------------------
+-- 8. PRODUITS, EMPLOYÉS (on garde les articles NDF-% et ceux des notes de frais)
+-- ---------------------------------------------------------------------
+DELETE FROM base_product
+WHERE code NOT LIKE 'NDF-%'
   AND id NOT IN (SELECT product FROM hr_expense_line WHERE product IS NOT NULL);
 
 DELETE FROM hr_employee_batch_set;
-
--- 🛡️ PROTECTION : Suppression des employés SAUF l'admin ET ceux qui ont des notes de frais
-DELETE FROM hr_employee 
-WHERE   NOT EXISTS (SELECT 1 FROM auth_user u WHERE u.code = 'admin' AND u.employee = hr_employee.id);
-
--- 🛡️ PROTECTION : Suppression des partenaires (on garde ceux liés aux notes de frais via l'employé)
-DELETE FROM base_partner 
-WHERE id > 68 
-  AND id NOT IN (9007, 9013) ;
+DELETE FROM hr_employee WHERE id NOT IN (SELECT id FROM keep_employees);
 
 DELETE FROM base_pricing_line;
 DELETE FROM base_pricing;
@@ -226,70 +246,106 @@ DELETE FROM project_wiki;
 DELETE FROM project_project;
 DELETE FROM account_payment_session_partner_set;
 
--- Mise à jour finale des produits (on ne touche pas aux NDF pour ne pas modifier leurs prix)
-UPDATE base_product SET manag_Price_Coef = 1.35, purchase_Price = sale_Price / 1.35
+-- Prix des produits (les NDF ne sont pas modifiés)
+UPDATE base_product SET manag_price_coef = 1.35, purchase_price = sale_price / 1.35
 WHERE code NOT LIKE 'NDF-%';
 
--- =====================================================================
--- 9. 🎯 NETTOYAGE CIBLÉ (Garder Admin, Axelor Company, Axelor Partner)
--- =====================================================================
+-- ---------------------------------------------------------------------
+-- 9. SOCIÉTÉS ET TIERS : on garde Axelor, admin et le compte technique
+-- ---------------------------------------------------------------------
+DELETE FROM base_company WHERE id NOT IN (SELECT id FROM keep_companies);
+DELETE FROM base_partner WHERE id NOT IN (SELECT id FROM keep_partners);
 
--- A. Nettoyer les liaisons de l'utilisateur Admin
-DELETE FROM auth_user_company_set WHERE auth_user NOT IN (SELECT id FROM auth_user WHERE code = 'admin');
+DELETE FROM account_account_default_tax_set
+  WHERE account_account IN (SELECT id FROM account_account WHERE company NOT IN (SELECT id FROM keep_companies));
+DELETE FROM account_account_management_sale_tax_set
+  WHERE account_account_management IN (SELECT id FROM account_account_management WHERE company NOT IN (SELECT id FROM keep_companies));
+DELETE FROM account_account_management_purchase_tax_set
+  WHERE account_account_management IN (SELECT id FROM account_account_management WHERE company NOT IN (SELECT id FROM keep_companies));
+DELETE FROM account_account_management WHERE company NOT IN (SELECT id FROM keep_companies);
 
--- B. Supprimer tous les UTILISATEURS sauf 'admin'
-DELETE FROM auth_user WHERE code != 'admin' AND code IS NOT NULL;
+DELETE FROM account_account_config_move_on_temp_closure_authorized_role_lis
+  WHERE account_account_config IN (SELECT id FROM account_account_config WHERE company NOT IN (SELECT id FROM keep_companies));
+DELETE FROM account_account_config_closure_authorized_role_list
+  WHERE account_account_config IN (SELECT id FROM account_account_config WHERE company NOT IN (SELECT id FROM keep_companies));
+DELETE FROM account_account_config_clearance_account_set
+  WHERE account_account_config IN (SELECT id FROM account_account_config WHERE company NOT IN (SELECT id FROM keep_companies));
+DELETE FROM account_invoice_product_statement
+  WHERE account_config IN (SELECT id FROM account_account_config WHERE company NOT IN (SELECT id FROM keep_companies));
+DELETE FROM account_account_config_temporary_closure_authorized_role_list
+  WHERE account_account_config IN (SELECT id FROM account_account_config WHERE company NOT IN (SELECT id FROM keep_companies));
+DELETE FROM account_account_config WHERE company NOT IN (SELECT id FROM keep_companies);
 
--- C. Supprimer toutes les SOCIÉTÉS sauf 'Axelor' ET celles liées aux notes de frais
-DELETE FROM base_company 
-WHERE name != 'Axelor'  ;
+DELETE FROM account_journal_valid_account_set
+  WHERE valid_account_set IN (SELECT id FROM account_account WHERE company NOT IN (SELECT id FROM keep_companies));
+DELETE FROM account_account_equiv
+  WHERE from_account IN (SELECT id FROM account_account WHERE company NOT IN (SELECT id FROM keep_companies));
+DELETE FROM account_account_equiv
+  WHERE to_account IN (SELECT id FROM account_account WHERE company NOT IN (SELECT id FROM keep_companies));
+DELETE FROM account_account_compatible_account_set
+  WHERE compatible_account_set IN (SELECT id FROM account_account WHERE company NOT IN (SELECT id FROM keep_companies));
+DELETE FROM account_account WHERE company NOT IN (SELECT id FROM keep_companies);
 
--- D. Supprimer tous les TIERS (Partenaires) sauf 'Axelor'
-DELETE FROM base_partner 
-WHERE name != 'Axelor'  ;
+-- ---------------------------------------------------------------------
+-- 10. RÉPARATION DES RÉFÉRENCES ORPHELINES (clé étrangère simple)
+--     colonne facultative -> mise à NULL ; colonne obligatoire -> ligne supprimée
+-- ---------------------------------------------------------------------
+DO $$
+DECLARE r record; n bigint; pass int := 0; total bigint;
+BEGIN
+  LOOP
+    pass := pass + 1; total := 0;
+    FOR r IN
+      SELECT c.conrelid::regclass AS child, a.attname AS child_col, a.attnotnull AS notnull,
+             c.confrelid::regclass AS parent, af.attname AS parent_col
+      FROM pg_constraint c
+      JOIN pg_attribute a  ON a.attrelid  = c.conrelid  AND a.attnum  = c.conkey[1]
+      JOIN pg_attribute af ON af.attrelid = c.confrelid AND af.attnum = c.confkey[1]
+      WHERE c.contype = 'f' AND array_length(c.conkey, 1) = 1
+    LOOP
+      IF r.notnull THEN
+        EXECUTE format('DELETE FROM %s ch WHERE NOT EXISTS (SELECT 1 FROM %s p WHERE p.%I = ch.%I)',
+                       r.child, r.parent, r.parent_col, r.child_col);
+      ELSE
+        EXECUTE format('UPDATE %s ch SET %I = NULL WHERE ch.%I IS NOT NULL AND NOT EXISTS (SELECT 1 FROM %s p WHERE p.%I = ch.%I)',
+                       r.child, r.child_col, r.child_col, r.parent, r.parent_col, r.child_col);
+      END IF;
+      GET DIAGNOSTICS n = ROW_COUNT;
+      IF n > 0 THEN
+        total := total + n;
+        RAISE NOTICE 'passe % : %.% -> % : % ligne(s) %', pass, r.child, r.child_col, r.parent, n,
+          CASE WHEN r.notnull THEN 'supprimée(s)' ELSE 'mise(s) à NULL' END;
+      END IF;
+    END LOOP;
+    EXIT WHEN total = 0 OR pass >= 10;
+  END LOOP;
+END $$;
 
+-- ---------------------------------------------------------------------
+-- 11. VÉRIFICATIONS DE SÉCURITÉ : si l'une échoue, TOUT est annulé
+-- ---------------------------------------------------------------------
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM auth_user WHERE code = 'admin') THEN
+    RAISE EXCEPTION 'Utilisateur admin supprimé : annulation';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM base_company WHERE name = 'Axelor') THEN
+    RAISE EXCEPTION 'Société Axelor supprimée : annulation';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM base_partner WHERE name = 'Axelor') THEN
+    RAISE EXCEPTION 'Tiers Axelor supprimé : annulation';
+  END IF;
+  IF EXISTS (SELECT 1 FROM auth_user u WHERE u.partner IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM base_partner p WHERE p.id = u.partner)) THEN
+    RAISE EXCEPTION 'Un utilisateur pointe vers un tiers supprimé : annulation';
+  END IF;
+  IF EXISTS (SELECT 1 FROM auth_user u WHERE u.active_company IS NOT NULL
+             AND NOT EXISTS (SELECT 1 FROM base_company c WHERE c.id = u.active_company)) THEN
+    RAISE EXCEPTION 'Un utilisateur pointe vers une société supprimée : annulation';
+  END IF;
+END $$;
 
-DELETE from account_account_default_tax_set where account_account   in (select id from account_account where Company != 1);
-
- DELETE from account_account_management_sale_tax_set where account_account_management   in (select id from account_account_management where Company != 1);
-
- DELETE from account_account_management_purchase_tax_set where account_account_management   in (select id from account_account_management where Company != 1);
-
-
-DELETE FROM account_Account_Management where Company != 1;
-
-DELETE FROM   account_account_config_move_on_temp_closure_authorized_role_lis where account_account_config   in (select id from account_account_config where Company != 1);
-DELETE FROM   account_account_config_closure_authorized_role_list where account_account_config   in (select id from account_account_config where Company != 1);
-DELETE FROM   account_account_config_clearance_account_set where account_account_config   in (select id from account_account_config where Company != 1);
- DELETE FROM   account_invoice_product_statement where  account_config   in (select id from account_account_config where Company != 1);
-
-DELETE FROM   account_account_config_temporary_closure_authorized_role_list where account_account_config   in (select id from account_account_config where Company != 1);
-
-
-DELETE FROM account_account_config where Company != 1;
-
- DELETE FROM  account_journal_valid_account_set where valid_account_set  in (select id from account_account where Company != 1);
- 
-  DELETE FROM  account_account_equiv where from_account  in (select id from account_account where Company != 1);
-  DELETE FROM  account_account_equiv where to_account  in (select id from account_account where Company != 1);
-
-  DELETE FROM  account_account_compatible_account_set where compatible_account_set  in (select id from account_account where Company != 1);
-
-
-
-
-DELETE FROM account_account where Company != 1;
-
-
--- =====================================================================
-
--- 🚀 RÉACTIVATION DES CLÉS ÉTRANGÈRES
+-- Réactivation des clés étrangères
 SET session_replication_role = 'origin';
 
 COMMIT;
-
-
-docker compose exec db psql -U sbsoft2026 -d sbsoft2026 -c  "select u.id, u.code, u.blocked, u.partner, p.id as partner_ok, u.active_company, c.id as company_ok
-  from auth_user u
-  left join base_partner p on p.id = u.partner
-  left join base_company c on c.id = u.active_company;"
