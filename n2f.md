@@ -1,6 +1,7 @@
 #Axelor std v8.4.8:
 https://github.com/axelor/axelor-docker.git
 https://github.com/axelor/open-suite-webapp/tree/v8.4.8
+https://github.com/softstream2027
 
 ssh-keygen -f "/home/audaxis/.ssh/known_hosts" -R "83.228.244.59"
 ssh -i ~/.ssh/mekkaoui.pem ubuntu@83.228.244.59
@@ -409,13 +410,16 @@ EOF
 
 
 
-
-
+ 
 ------------a zero----------------------------
+
+Copies de sécurité :
+  copie de sécurité de l'état actuel : /mnt/data/backups/pre-restore_axelor_2026-11-12_205808.dump
+  copie de sécurité de l'état actuel : /mnt/data/backups/pre-restore_saas_2026-11-12_205808.dump
+
 ./restore.sh list  
-Sauvegardes disponibles dans /mnt/data/backups (les plus récentes d'abord) : 2026-11-10_230000 = base avec data demo std all
 voir backupsDemo/
- ./restore.sh 2026-11-10_230000 all
+ ./restore.sh 2026-11-12_205808 all
  
  ---------------ègle d'or : N'utilisez jamais --force-recreate pour le service app--------------docker compose up -d --force-recreate app-----
 

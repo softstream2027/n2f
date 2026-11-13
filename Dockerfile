@@ -50,6 +50,7 @@ RUN --mount=type=secret,id=git_token,required=false \
     }; \
     clone https://github.com/axelor/open-suite-webapp.git "${WEBAPP_VERSION}" /src/webapp; \
     clone https://github.com/axelor/axelor-open-suite.git "${AOS_VERSION}" /src/webapp/modules/axelor-open-suite; \
+    clone https://github.com/softstream2027/n2f-custo.git "main" /src/webapp/modules/n2f-custo; \
     for module in ${ADDITIONAL_MODULES}; do \
       url="${module%%|*}"; ref=""; \
       case "$module" in *"|"*) ref="${module#*|}" ;; esac; \
