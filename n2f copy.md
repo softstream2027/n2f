@@ -1,3 +1,6 @@
+sudo apt update
+sudo apt install -y ansible-core
+
 
 cd /mnt/data 
 sudo chown -R ubuntu:ubuntu /mnt/data

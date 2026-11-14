@@ -27,6 +27,7 @@
     n2f_dir: "{{ n2f_data_dir }}/n2f"
     n2f_repo: https://github.com/softstream2027/n2f.git
     n2f_repo_version: main
+    n2f_git_update: false          # true = git pull (échoue si des fichiers suivis sont modifiés)
 
     n2f_image: n2f:1.1.0           # doit correspondre à "image:" du docker-compose.yml
     aos_version: v9.2.0
@@ -193,7 +194,7 @@
         repo: "{{ n2f_repo }}"
         dest: "{{ n2f_dir }}"
         version: "{{ n2f_repo_version }}"
-        update: true
+        update: "{{ n2f_git_update | bool }}"
 
     - name: Créer .env et .env.saas depuis les exemples (sans écraser)
       become_user: "{{ n2f_user }}"
@@ -234,10 +235,10 @@
       changed_when: true
       no_log: true
 
-    - name: Ignorer .env et .env.saas dans git
+    - name: Ignorer .env et .env.saas (via .git/info/exclude, sans modifier .gitignore)
       become_user: "{{ n2f_user }}"
       ansible.builtin.lineinfile:
-        path: "{{ n2f_dir }}/.gitignore"
+        path: "{{ n2f_dir }}/.git/info/exclude"
         line: "{{ item }}"
         create: true
         mode: "0644"
