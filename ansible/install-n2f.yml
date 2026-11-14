@@ -100,8 +100,17 @@
         path: "{{ n2f_data_dir }}/.storage-relocated"
       register: storage_marker
 
+    - name: Racine docker actuelle
+      ansible.builtin.shell: docker info 2>/dev/null | grep "Docker Root Dir" || true
+      register: current_root
+      changed_when: false
+
+    # Ne migre que si le marqueur est absent ET que docker n'utilise pas déjà la nouvelle racine
+    # (sinon un rsync écraserait les métadonnées d'images déjà déplacées)
     - name: Déplacer docker et containerd vers {{ n2f_data_dir }}
-      when: not storage_marker.stat.exists
+      when:
+        - not storage_marker.stat.exists
+        - (n2f_data_dir ~ '/docker') not in current_root.stdout
       block:
         - name: Arrêter docker et containerd
           ansible.builtin.systemd:
@@ -148,6 +157,13 @@
             path: "{{ n2f_data_dir }}/.storage-relocated"
             state: touch
             mode: "0644"
+
+    - name: Marquer la migration comme faite (racine déjà correcte)
+      ansible.builtin.file:
+        path: "{{ n2f_data_dir }}/.storage-relocated"
+        state: touch
+        mode: "0644"
+      when: (n2f_data_dir ~ '/docker') in current_root.stdout
 
     - name: Démarrer containerd et docker
       ansible.builtin.systemd:
