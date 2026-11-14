@@ -15,8 +15,13 @@
 #                                   effacement de la base Axelor ET de axelor-data, reconstruction
 #                                   de l'image (re-clone de n2f-custo), redémarrage, vérification
 #   (n2f_reset_db=true exige aussi -e n2f_confirm_reset=OUI)
-#   --tags delete_all -e n2f_run_delete_all=true -e n2f_confirm_delete=OUI
-#                                   exécute delete_all.sql sur la base Axelor
+#   -e n2f_reset_saas=true -e n2f_confirm_reset=OUI
+#                                   RÉINITIALISE LE SAAS (seul, ou avec n2f_reset_all) : arrête saas-db,
+#                                   vide saas-postgres-data, relance, puis prisma migrate reset,
+#                                   prisma db push et redémarrage du backend
+#   -e n2f_run_delete_all=true -e n2f_confirm_delete=OUI
+#                                   exécute delete_all.sql (supprime les données Axelor en gardant la
+#                                   base et les apps installées), puis redémarre Axelor
 #
 # Les secrets (.env) se passent via ansible-vault, par exemple :
 #   ansible-playbook install-n2f.yml -e @secrets.yml --ask-vault-pass
@@ -37,10 +42,6 @@
     n2f_image: n2f:1.1.0           # doit correspondre à "image:" du docker-compose.yml
     aos_version: v9.2.0
 
-    # Base Axelor (utilisée seulement pour delete_all.sql)
-    n2f_db_user: sbsoft2026
-    n2f_db_name: sbsoft2026
-
     # Valeurs à écrire dans .env (laisser vide pour garder .env.example tel quel).
     # À stocker dans un fichier ansible-vault, par exemple :
     # n2f_env_overrides:
@@ -60,7 +61,8 @@
 
     # Réinitialisation complète (à zéro)
     n2f_reset_all: false           # base Axelor + axelor-data + reconstruction de l'image
-    n2f_reset_saas: false          # avec n2f_reset_all : vide aussi la base SaaS et Redis
+    n2f_reset_saas: false          # vide la base SaaS et rejoue prisma (utilisable seul)
+    n2f_reset_redis: false         # avec n2f_reset_saas : vide aussi Redis (files de jobs)
     n2f_confirm_reset: ""          # doit valoir OUI pour n2f_reset_all ou n2f_reset_db
     n2f_dump_before_reset: true    # pg_dump dans n2f_backup_dir avant d'effacer
 
@@ -83,7 +85,13 @@
       ansible.builtin.assert:
         that: n2f_confirm_reset == 'OUI'
         fail_msg: "Réinitialisation demandée : ajoutez -e n2f_confirm_reset=OUI pour confirmer."
-      when: reset_db_effective | bool
+      when: (reset_db_effective | bool) or (n2f_reset_saas | bool)
+
+    - name: Confirmation explicite pour delete_all.sql
+      ansible.builtin.assert:
+        that: n2f_confirm_delete == 'OUI'
+        fail_msg: "delete_all.sql demandé : ajoutez -e n2f_confirm_delete=OUI pour confirmer."
+      when: n2f_run_delete_all | bool
 
   tasks:
     # ------------------------------------------------------------------ paquets
@@ -335,11 +343,23 @@
       when: n2f_reset_all | bool
       changed_when: true
 
-    - name: Vider la base SaaS et Redis (réinitialisation complète avec n2f_reset_saas)
-      ansible.builtin.command: find {{ n2f_data_dir }}/saas-postgres-data {{ n2f_data_dir }}/redis-data -mindepth 1 -delete
+    - name: Arrêter le backend et la base SaaS (réinitialisation SaaS)
+      ansible.builtin.command: docker compose stop backend saas-db
+      args:
+        chdir: "{{ n2f_dir }}"
+      when: n2f_reset_saas | bool
+      changed_when: true
+
+    - name: Vider /mnt/data/saas-postgres-data (DESTRUCTIF)
+      ansible.builtin.command: find {{ n2f_data_dir }}/saas-postgres-data -mindepth 1 -delete
+      when: n2f_reset_saas | bool
+      changed_when: true
+
+    - name: Vider Redis (optionnel)
+      ansible.builtin.command: find {{ n2f_data_dir }}/redis-data -mindepth 1 -delete
       when:
-        - n2f_reset_all | bool
         - n2f_reset_saas | bool
+        - n2f_reset_redis | bool
       changed_when: true
 
     # ------------------------------------------------------------------ image
@@ -373,6 +393,49 @@
       register: compose_up
       changed_when: "'Started' in compose_up.stderr or 'Created' in compose_up.stderr"
 
+    - name: Attendre que la base SaaS soit prête
+      ansible.builtin.command: docker compose exec -T saas-db sh -c 'pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+      args:
+        chdir: "{{ n2f_dir }}"
+      register: saas_db_ready
+      until: saas_db_ready.rc == 0
+      retries: 30
+      delay: 5
+      changed_when: false
+      when: n2f_reset_saas | bool
+
+    - name: Attendre que le conteneur backend soit joignable
+      ansible.builtin.command: docker compose exec -T backend true
+      args:
+        chdir: "{{ n2f_dir }}"
+      register: backend_ready
+      until: backend_ready.rc == 0
+      retries: 30
+      delay: 10
+      changed_when: false
+      when: n2f_reset_saas | bool
+
+    - name: Prisma migrate reset
+      ansible.builtin.command: docker compose exec -T backend npx prisma migrate reset --force
+      args:
+        chdir: "{{ n2f_dir }}"
+      when: n2f_reset_saas | bool
+      changed_when: true
+
+    - name: Prisma db push
+      ansible.builtin.command: docker compose exec -T backend npx prisma db push
+      args:
+        chdir: "{{ n2f_dir }}"
+      when: n2f_reset_saas | bool
+      changed_when: true
+
+    - name: Redémarrer le backend
+      ansible.builtin.command: docker compose restart backend
+      args:
+        chdir: "{{ n2f_dir }}"
+      when: n2f_reset_saas | bool
+      changed_when: true
+
     - name: Attendre qu'Axelor réponde réellement (premier démarrage jusqu'à ~30 min)
       ansible.builtin.command: >-
         docker compose exec -T app curl -sL -o /dev/null -w "%{http_code}" http://localhost:8080/
@@ -383,6 +446,49 @@
       retries: 90
       delay: 20
       changed_when: false
+
+    - name: delete_all.sql existe-t-il dans le dépôt ?
+      ansible.builtin.stat:
+        path: "{{ n2f_dir }}/delete_all.sql"
+      register: delete_all_file
+      when: n2f_run_delete_all | bool
+
+    - name: Arrêter si delete_all.sql est introuvable
+      ansible.builtin.fail:
+        msg: "{{ n2f_dir }}/delete_all.sql est introuvable : ajoutez-le au dépôt n2f."
+      when:
+        - n2f_run_delete_all | bool
+        - not delete_all_file.stat.exists
+
+    - name: Exécuter delete_all.sql sur la base Axelor (DESTRUCTIF)
+      ansible.builtin.shell: >-
+        docker compose exec -T db sh -c
+        'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v ON_ERROR_STOP=1'
+        < delete_all.sql
+      args:
+        chdir: "{{ n2f_dir }}"
+      register: delete_all_result
+      when: n2f_run_delete_all | bool
+      changed_when: true
+
+    - name: Redémarrer Axelor après la purge (caches et sessions)
+      ansible.builtin.command: docker compose restart app
+      args:
+        chdir: "{{ n2f_dir }}"
+      when: n2f_run_delete_all | bool
+      changed_when: true
+
+    - name: Attendre qu'Axelor réponde après la purge
+      ansible.builtin.command: >-
+        docker compose exec -T app curl -sL -o /dev/null -w "%{http_code}" http://localhost:8080/
+      args:
+        chdir: "{{ n2f_dir }}"
+      register: health_after_purge
+      until: health_after_purge.rc == 0 and health_after_purge.stdout in ['200', '401', '403']
+      retries: 90
+      delay: 20
+      changed_when: false
+      when: n2f_run_delete_all | bool
 
     - name: Rôles et groupes N2F présents en base ?
       ansible.builtin.command:
@@ -443,16 +549,3 @@
       ansible.builtin.debug:
         msg: "backup.sh introuvable dans {{ n2f_dir }} : tâche cron non créée."
       when: not backup_script.stat.exists
-
-    # ------------------------------------------------------------------ purge (manuel)
-    - name: Exécuter delete_all.sql (DESTRUCTIF, explicite uniquement)
-      ansible.builtin.shell: >-
-        docker compose exec -T db psql -U {{ n2f_db_user }} -d {{ n2f_db_name }}
-        -v ON_ERROR_STOP=1 < delete_all.sql
-      args:
-        chdir: "{{ n2f_dir }}"
-      when:
-        - n2f_run_delete_all | bool
-        - n2f_confirm_delete == 'OUI'
-      tags: [never, delete_all]
-      changed_when: true

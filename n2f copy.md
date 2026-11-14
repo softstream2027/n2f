@@ -1,6 +1,12 @@
 sudo apt update
 sudo apt install -y ansible-core
 
+cd /mnt/data/n2f/ansible
+ansible-playbook -i inventory.ini install-n2f.yml -K \
+  -e n2f_run_delete_all=true -e n2f_confirm_delete=OUI
+
+  mail axelor
+  pwd axelor
 
 cd /mnt/data 
 sudo chown -R ubuntu:ubuntu /mnt/data
