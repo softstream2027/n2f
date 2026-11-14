@@ -1,0 +1,358 @@
+---
+# Installation de la stack N2F (Axelor Open Suite 9 + SaaS + Caddy) avec Docker.
+#
+# Usage :
+#   ansible-playbook -i inventory.ini install-n2f.yml
+#
+# Actions destructives : toutes DÉSACTIVÉES par défaut, à activer explicitement :
+#   -e n2f_reset_db=true            supprime la base Axelor (/mnt/data/postgres-data)
+#   -e n2f_prune_docker=true        docker system prune -a --volumes -f
+#   -e n2f_remove_old_dirs=true     supprime /var/lib/docker et /var/lib/containerd
+#                                   (uniquement après migration vérifiée vers /mnt/data)
+#   -e n2f_force_rebuild=true       reconstruit l'image en re-clonant n2f-custo (main)
+#   --tags delete_all -e n2f_run_delete_all=true -e n2f_confirm_delete=OUI
+#                                   exécute delete_all.sql sur la base Axelor
+#
+# Les secrets (.env) se passent via ansible-vault, par exemple :
+#   ansible-playbook install-n2f.yml -e @secrets.yml --ask-vault-pass
+#   avec secrets.yml (chiffré) contenant n2f_env_overrides (voir plus bas).
+
+- name: Installer la stack N2F
+  hosts: n2f
+  become: true
+
+  vars:
+    n2f_user: ubuntu
+    n2f_data_dir: /mnt/data
+    n2f_dir: "{{ n2f_data_dir }}/n2f"
+    n2f_repo: https://github.com/softstream2027/n2f.git
+    n2f_repo_version: main
+
+    n2f_image: n2f:1.1.0           # doit correspondre à "image:" du docker-compose.yml
+    aos_version: v9.2.0
+
+    # Base Axelor (utilisée seulement pour delete_all.sql)
+    n2f_db_user: sbsoft2026
+    n2f_db_name: sbsoft2026
+
+    # Valeurs à écrire dans .env (laisser vide pour garder .env.example tel quel).
+    # À stocker dans un fichier ansible-vault, par exemple :
+    # n2f_env_overrides:
+    #   DB_USER: sbsoft2026
+    #   DB_PASSWORD: "..."
+    #   DB_NAME: sbsoft2026
+    #   AXELOR_DOMAIN: n2f.example.com
+    n2f_env_overrides: {}
+
+    # Garde-fous : rien de destructif par défaut
+    n2f_reset_db: false
+    n2f_prune_docker: false
+    n2f_remove_old_dirs: false
+    n2f_force_rebuild: false
+    n2f_run_delete_all: false
+    n2f_confirm_delete: ""
+
+    # Sauvegarde nocturne
+    n2f_backup_hour: "2"
+    n2f_backup_minute: "0"
+    n2f_backup_dir: "{{ n2f_data_dir }}/backups"
+
+  pre_tasks:
+    - name: Vérifier que la machine est sous Ubuntu
+      ansible.builtin.assert:
+        that: ansible_facts['distribution'] == 'Ubuntu'
+        fail_msg: "Ce playbook est écrit pour Ubuntu (docker.io, docker-compose-v2, docker-buildx)."
+
+  tasks:
+    # ------------------------------------------------------------------ paquets
+    - name: Mettre à jour le cache apt et installer les paquets
+      ansible.builtin.apt:
+        update_cache: true
+        cache_valid_time: 3600
+        name:
+          - docker.io
+          - docker-buildx
+          - docker-compose-v2
+          - git
+          - rsync
+          - openssl
+          - cron
+        state: present
+
+    - name: Ajouter {{ n2f_user }} au groupe docker
+      ansible.builtin.user:
+        name: "{{ n2f_user }}"
+        groups: docker
+        append: true
+
+    # Non récursif : un chown -R rejouerait sur postgres-data (uid 999) et casserait la base
+    - name: Répertoire de données
+      ansible.builtin.file:
+        path: "{{ n2f_data_dir }}"
+        state: directory
+        owner: "{{ n2f_user }}"
+        group: "{{ n2f_user }}"
+
+    # ------------------------------------------------- stockage docker/containerd
+    - name: Migration déjà faite ?
+      ansible.builtin.stat:
+        path: "{{ n2f_data_dir }}/.storage-relocated"
+      register: storage_marker
+
+    - name: Déplacer docker et containerd vers {{ n2f_data_dir }}
+      when: not storage_marker.stat.exists
+      block:
+        - name: Arrêter docker et containerd
+          ansible.builtin.systemd:
+            name: "{{ item }}"
+            state: stopped
+          loop: [docker, docker.socket, containerd]
+
+        - name: Les anciens répertoires existent-ils ?
+          ansible.builtin.stat:
+            path: "{{ item }}"
+          loop: [/var/lib/docker, /var/lib/containerd]
+          register: old_dirs
+
+        - name: Créer les nouveaux répertoires
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: directory
+          loop: ["{{ n2f_data_dir }}/docker", "{{ n2f_data_dir }}/containerd", /etc/docker, /etc/containerd]
+
+        - name: Copier /var/lib/docker
+          ansible.builtin.command: rsync -aHAX /var/lib/docker/ {{ n2f_data_dir }}/docker/
+          when: old_dirs.results[0].stat.exists
+          changed_when: true
+
+        - name: Copier /var/lib/containerd
+          ansible.builtin.command: rsync -aHAX /var/lib/containerd/ {{ n2f_data_dir }}/containerd/
+          when: old_dirs.results[1].stat.exists
+          changed_when: true
+
+        - name: Configurer data-root de docker
+          ansible.builtin.copy:
+            dest: /etc/docker/daemon.json
+            content: '{ "data-root": "{{ n2f_data_dir }}/docker" }'
+            mode: "0644"
+
+        - name: Configurer root de containerd
+          ansible.builtin.copy:
+            dest: /etc/containerd/config.toml
+            content: 'root = "{{ n2f_data_dir }}/containerd"'
+            mode: "0644"
+
+        - name: Marquer la migration comme faite
+          ansible.builtin.file:
+            path: "{{ n2f_data_dir }}/.storage-relocated"
+            state: touch
+            mode: "0644"
+
+    - name: Démarrer containerd et docker
+      ansible.builtin.systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: true
+      loop: [containerd, docker]
+
+    - name: Vérifier le répertoire racine de docker
+      ansible.builtin.shell: docker info | grep "Docker Root Dir"
+      register: docker_root
+      changed_when: false
+      failed_when: n2f_data_dir not in docker_root.stdout
+
+    - name: Supprimer les anciens répertoires (opt-in, après vérification)
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop: [/var/lib/docker, /var/lib/containerd]
+      when: n2f_remove_old_dirs | bool
+
+    - name: Nettoyer docker (opt-in, supprime images et volumes inutilisés)
+      ansible.builtin.command: docker system prune -a --volumes -f
+      when: n2f_prune_docker | bool
+      changed_when: true
+
+    # ------------------------------------------------------------------ buildx
+    - name: Supprimer les anciens plugins buildx manuels
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "/home/{{ n2f_user }}/.docker/cli-plugins/docker-buildx"
+        - /usr/local/lib/docker/cli-plugins/docker-buildx
+
+    - name: Vérifier buildx
+      ansible.builtin.command: docker buildx version
+      changed_when: false
+
+    # ------------------------------------------------------------------ dépôt
+    - name: Cloner le dépôt n2f
+      become_user: "{{ n2f_user }}"
+      ansible.builtin.git:
+        repo: "{{ n2f_repo }}"
+        dest: "{{ n2f_dir }}"
+        version: "{{ n2f_repo_version }}"
+        update: true
+
+    - name: Créer .env et .env.saas depuis les exemples (sans écraser)
+      become_user: "{{ n2f_user }}"
+      ansible.builtin.copy:
+        src: "{{ n2f_dir }}/{{ item.src }}"
+        dest: "{{ n2f_dir }}/{{ item.dest }}"
+        remote_src: true
+        force: false
+        mode: "0600"
+      loop:
+        - { src: .env.example, dest: .env }
+        - { src: .env.saas.example, dest: .env.saas }
+
+    - name: Renseigner les valeurs de .env (variables n2f_env_overrides)
+      become_user: "{{ n2f_user }}"
+      ansible.builtin.lineinfile:
+        path: "{{ n2f_dir }}/.env"
+        regexp: "^{{ item.key }}="
+        line: "{{ item.key }}={{ item.value }}"
+        mode: "0600"
+      loop: "{{ n2f_env_overrides | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      no_log: true
+
+    - name: .env.saas contient-il encore A_GENERER ?
+      ansible.builtin.command: grep -q A_GENERER {{ n2f_dir }}/.env.saas
+      register: saas_placeholder
+      changed_when: false
+      failed_when: saas_placeholder.rc > 1
+
+    - name: Générer le secret du SaaS
+      become_user: "{{ n2f_user }}"
+      ansible.builtin.shell: sed -i "s|A_GENERER|$(openssl rand -hex 32)|" .env.saas
+      args:
+        chdir: "{{ n2f_dir }}"
+      when: saas_placeholder.rc == 0
+      changed_when: true
+      no_log: true
+
+    - name: Ignorer .env et .env.saas dans git
+      become_user: "{{ n2f_user }}"
+      ansible.builtin.lineinfile:
+        path: "{{ n2f_dir }}/.gitignore"
+        line: "{{ item }}"
+        create: true
+        mode: "0644"
+      loop: [.env, .env.saas]
+
+    # ------------------------------------------------------------------ données
+    - name: Répertoires de données (axelor 1000:1000, postgres 999:999)
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "{{ item.owner }}"
+        group: "{{ item.owner }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: "{{ n2f_data_dir }}/axelor-data", owner: "1000", mode: "0755" }
+        - { path: "{{ n2f_data_dir }}/postgres-data", owner: "999", mode: "0700" }
+        - { path: "{{ n2f_data_dir }}/saas-postgres-data", owner: "root", mode: "0755" }
+        - { path: "{{ n2f_data_dir }}/redis-data", owner: "root", mode: "0755" }
+
+    - name: Arrêter la stack avant de supprimer la base (opt-in)
+      ansible.builtin.command: docker compose down
+      args:
+        chdir: "{{ n2f_dir }}"
+      when: n2f_reset_db | bool
+      changed_when: true
+
+    - name: Vider /mnt/data/postgres-data (opt-in, DESTRUCTIF)
+      ansible.builtin.command: find {{ n2f_data_dir }}/postgres-data -mindepth 1 -delete
+      when: n2f_reset_db | bool
+      changed_when: true
+
+    # ------------------------------------------------------------------ image
+    - name: L'image {{ n2f_image }} existe-t-elle ?
+      ansible.builtin.command: docker image inspect {{ n2f_image }}
+      register: image_check
+      changed_when: false
+      failed_when: false
+
+    - name: Construire l'image (étape longue, plusieurs dizaines de minutes)
+      ansible.builtin.command: >-
+        docker build
+        {{ '--no-cache-filter sources' if (n2f_force_rebuild | bool) else '' }}
+        --build-arg AOS_VERSION={{ aos_version }}
+        --build-arg ADDITIONAL_MODULES=""
+        -t {{ n2f_image }} .
+      args:
+        chdir: "{{ n2f_dir }}"
+      environment:
+        DOCKER_BUILDKIT: "1"
+      when: image_check.rc != 0 or (n2f_force_rebuild | bool)
+      async: 7200
+      poll: 60
+      changed_when: true
+
+    # ------------------------------------------------------------------ démarrage
+    - name: Démarrer la stack
+      ansible.builtin.command: docker compose up -d
+      args:
+        chdir: "{{ n2f_dir }}"
+      register: compose_up
+      changed_when: "'Started' in compose_up.stderr or 'Created' in compose_up.stderr"
+
+    - name: Attendre qu'Axelor réponde (premier démarrage jusqu'à ~30 min)
+      ansible.builtin.command: docker compose exec -T app curl -fs http://localhost:8080/health
+      args:
+        chdir: "{{ n2f_dir }}"
+      register: health
+      until: health.rc == 0
+      retries: 60
+      delay: 30
+      changed_when: false
+
+    # ------------------------------------------------------------------ sauvegarde
+    - name: Répertoire des sauvegardes
+      ansible.builtin.file:
+        path: "{{ n2f_backup_dir }}"
+        state: directory
+        owner: "{{ n2f_user }}"
+        group: "{{ n2f_user }}"
+        mode: "0750"
+
+    - name: backup.sh existe-t-il dans le dépôt ?
+      ansible.builtin.stat:
+        path: "{{ n2f_dir }}/backup.sh"
+      register: backup_script
+
+    - name: Rendre backup.sh exécutable
+      ansible.builtin.file:
+        path: "{{ n2f_dir }}/backup.sh"
+        mode: "0755"
+      when: backup_script.stat.exists
+
+    - name: Planifier la sauvegarde chaque nuit
+      ansible.builtin.cron:
+        name: "n2f backup"
+        user: "{{ n2f_user }}"
+        hour: "{{ n2f_backup_hour }}"
+        minute: "{{ n2f_backup_minute }}"
+        job: "{{ n2f_dir }}/backup.sh >> {{ n2f_backup_dir }}/backup.log 2>&1"
+      when: backup_script.stat.exists
+
+    - name: Avertir si backup.sh est absent
+      ansible.builtin.debug:
+        msg: "backup.sh introuvable dans {{ n2f_dir }} : tâche cron non créée."
+      when: not backup_script.stat.exists
+
+    # ------------------------------------------------------------------ purge (manuel)
+    - name: Exécuter delete_all.sql (DESTRUCTIF, explicite uniquement)
+      ansible.builtin.shell: >-
+        docker compose exec -T db psql -U {{ n2f_db_user }} -d {{ n2f_db_name }}
+        -v ON_ERROR_STOP=1 < delete_all.sql
+      args:
+        chdir: "{{ n2f_dir }}"
+      when:
+        - n2f_run_delete_all | bool
+        - n2f_confirm_delete == 'OUI'
+      tags: [never, delete_all]
+      changed_when: true

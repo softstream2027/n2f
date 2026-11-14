@@ -3,6 +3,11 @@ https://github.com/axelor/axelor-docker.git
 https://github.com/axelor/open-suite-webapp/tree/v8.4.8
 https://github.com/softstream2027
 
+
+reste:
+pour les 6 menue il faut les creer dasn le fichier .csv sans Parent!
+------------------
+
 ssh-keygen -f "/home/audaxis/.ssh/known_hosts" -R "83.228.244.59"
 ssh -i ~/.ssh/mekkaoui.pem ubuntu@83.228.244.59
 cd /mnt/data
@@ -126,6 +131,8 @@ crontab -e
 0 2 * * * /mnt/data/n2f/backup.sh >> /mnt/data/backups/backup.log 2>&1
 
 activer email smtp dasn axelor : Compte par défaut Compte par défaut ssl smtp.gmail.com
+https://taysirflow.duckdns.org/#/ds/mail.root.email.conf.mail.account/list/1
+
 importer les roles dans gestion des appllications
 
 https://taysirflow.duckdns.org/#/ds/admin.root.templating.template/edit/3
@@ -133,8 +140,7 @@ Dans le champ "Valeur Expr." de cette fenêtre, remplacez tout le texte par ceci
 eval: com.axelor.utils.helpers.StringHelper.escapeHtml(transientPassword)
 eval: com.axelor.utils.helpers.StringHelper.escapeHtml(__repo__(User).find(id).transientPassword)
 
-il faut creer l'employee avec leur responsable employer pour pouvoir consulter tous les donne des autre user de meme societer
-
+ 
 ajouter le role Expense User et role mobile base et mobile hr    a la group HRM
 retirer le role role.mobile.hr de group !!! securiter
 et perm.mobile.MetaFile.r en Cochez la case Modification (Write).
@@ -425,6 +431,7 @@ voir backupsDemo/
 
  # 
  docker compose exec -T db psql -U sbsoft2026 -d sbsoft2026 -v ON_ERROR_STOP=1 < delete_all.sql
+ modifier le pwd de admin
 docker compose up -d --force-recreate app
   docker compose up -d app
 # 1. Arrêter le conteneur de la base SaaS
@@ -448,3 +455,20 @@ docker compose logs --tail=100 backend
 
 docker compose up -d --force-recreate app
 docker compose logs -f app
+
+------------------------------
+SoftStream
+La création de votre espace n’a pas abouti
+
+Votre paiement a bien été reçu, mais l’espace n’a pas pu être finalisé. Contactez le support en indiquant la référence ci-dessous : nous reprenons la création sans nouveau paiement.
+
+Référence cmwfdocuy0000pj1vhpg4ynf1
+->il faut dans ce cas envoyer un mail au support
+
+2f-app  | Caused by: org.postgresql.util.PSQLException: ERROR: duplicate key value violates unique constraint "uk_kow9mvtxabxwu64owau9r4feu"
+n2f-app  |   Detail: Key (code, company, type_select)=(FY2026, 2, 1) already exists
+
+n2f-app  | 2026-11-13 20:37:24.369 ERROR 7 --- [nio-8080-exec-4] o.h.engine.jdbc.spi.SqlExceptionHelper   : ERROR: duplicate key value violates unique constraint "uk_kow9mvtxabxwu64owau9r4feu"
+n2f-app  |   Detail: Key (code, company, type_select)=(FY2026, 2, 1) already exists.
+n2f-app  | 2026-11-13 20:37:24.385 ERROR 7 --- [nio-8080-exec-4] c.a.a.b.s.exception.TraceBackService     : org.hibernate.exception.ConstraintViolationException: could not execute statement [ERROR: duplicate key value violates unique constraint "uk_kow9mvtxabxwu64owau9r4feu"
+n2f-app  |   Detail: Key (code, company, type_select)=(FY2026, 2, 1) already exists.] [insert into base_year (archived,attrs,closure_date_time,code,company,created_by,created_on,from_date,import_id,import_origin,name,period_duration_select,process_instance_id,reported_balance_date,status_select,to_date,type_select,updated_by,updated_on,version,id) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)]
