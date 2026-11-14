@@ -10,6 +10,11 @@
 #   -e n2f_remove_old_dirs=true     supprime /var/lib/docker et /var/lib/containerd
 #                                   (uniquement après migration vérifiée vers /mnt/data)
 #   -e n2f_force_rebuild=true       reconstruit l'image en re-clonant n2f-custo (main)
+#   -e n2f_reset_all=true -e n2f_confirm_reset=OUI
+#                                   RÉINITIALISATION COMPLÈTE : sauvegarde de sécurité, arrêt,
+#                                   effacement de la base Axelor ET de axelor-data, reconstruction
+#                                   de l'image (re-clone de n2f-custo), redémarrage, vérification
+#   (n2f_reset_db=true exige aussi -e n2f_confirm_reset=OUI)
 #   --tags delete_all -e n2f_run_delete_all=true -e n2f_confirm_delete=OUI
 #                                   exécute delete_all.sql sur la base Axelor
 #
@@ -53,6 +58,16 @@
     n2f_run_delete_all: false
     n2f_confirm_delete: ""
 
+    # Réinitialisation complète (à zéro)
+    n2f_reset_all: false           # base Axelor + axelor-data + reconstruction de l'image
+    n2f_reset_saas: false          # avec n2f_reset_all : vide aussi la base SaaS et Redis
+    n2f_confirm_reset: ""          # doit valoir OUI pour n2f_reset_all ou n2f_reset_db
+    n2f_dump_before_reset: true    # pg_dump dans n2f_backup_dir avant d'effacer
+
+    # Valeurs effectives (ne pas modifier)
+    reset_db_effective: "{{ (n2f_reset_db | bool) or (n2f_reset_all | bool) }}"
+    rebuild_effective: "{{ (n2f_force_rebuild | bool) or (n2f_reset_all | bool) }}"
+
     # Sauvegarde nocturne
     n2f_backup_hour: "2"
     n2f_backup_minute: "0"
@@ -63,6 +78,12 @@
       ansible.builtin.assert:
         that: ansible_facts['distribution'] == 'Ubuntu'
         fail_msg: "Ce playbook est écrit pour Ubuntu (docker.io, docker-compose-v2, docker-buildx)."
+
+    - name: Confirmation explicite avant toute réinitialisation
+      ansible.builtin.assert:
+        that: n2f_confirm_reset == 'OUI'
+        fail_msg: "Réinitialisation demandée : ajoutez -e n2f_confirm_reset=OUI pour confirmer."
+      when: reset_db_effective | bool
 
   tasks:
     # ------------------------------------------------------------------ paquets
@@ -274,16 +295,51 @@
         - { path: "{{ n2f_data_dir }}/saas-postgres-data", owner: "root", mode: "0755" }
         - { path: "{{ n2f_data_dir }}/redis-data", owner: "root", mode: "0755" }
 
+    - name: Répertoire des sauvegardes (créé avant la sauvegarde de sécurité)
+      ansible.builtin.file:
+        path: "{{ n2f_backup_dir }}"
+        state: directory
+        owner: "{{ n2f_user }}"
+        group: "{{ n2f_user }}"
+        mode: "0750"
+
+    - name: Sauvegarde de sécurité de la base Axelor avant réinitialisation
+      ansible.builtin.shell: |
+        set -o pipefail
+        if [ -n "$(docker compose ps -q db)" ]; then
+          docker compose exec -T db sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' \
+            > {{ n2f_backup_dir }}/avant-reset-$(date +%F-%H%M).sql
+        fi
+      args:
+        executable: /bin/bash
+        chdir: "{{ n2f_dir }}"
+      when:
+        - reset_db_effective | bool
+        - n2f_dump_before_reset | bool
+      changed_when: true
+
     - name: Arrêter la stack avant de supprimer la base (opt-in)
       ansible.builtin.command: docker compose down
       args:
         chdir: "{{ n2f_dir }}"
-      when: n2f_reset_db | bool
+      when: reset_db_effective | bool
       changed_when: true
 
     - name: Vider /mnt/data/postgres-data (opt-in, DESTRUCTIF)
       ansible.builtin.command: find {{ n2f_data_dir }}/postgres-data -mindepth 1 -delete
-      when: n2f_reset_db | bool
+      when: reset_db_effective | bool
+      changed_when: true
+
+    - name: Vider /mnt/data/axelor-data (réinitialisation complète, DESTRUCTIF)
+      ansible.builtin.command: find {{ n2f_data_dir }}/axelor-data -mindepth 1 -delete
+      when: n2f_reset_all | bool
+      changed_when: true
+
+    - name: Vider la base SaaS et Redis (réinitialisation complète avec n2f_reset_saas)
+      ansible.builtin.command: find {{ n2f_data_dir }}/saas-postgres-data {{ n2f_data_dir }}/redis-data -mindepth 1 -delete
+      when:
+        - n2f_reset_all | bool
+        - n2f_reset_saas | bool
       changed_when: true
 
     # ------------------------------------------------------------------ image
@@ -296,7 +352,7 @@
     - name: Construire l'image (étape longue, plusieurs dizaines de minutes)
       ansible.builtin.command: >-
         docker build
-        {{ '--no-cache-filter sources' if (n2f_force_rebuild | bool) else '' }}
+        {{ '--no-cache-filter sources' if (rebuild_effective | bool) else '' }}
         --build-arg AOS_VERSION={{ aos_version }}
         --build-arg ADDITIONAL_MODULES=""
         -t {{ n2f_image }} .
@@ -304,7 +360,7 @@
         chdir: "{{ n2f_dir }}"
       environment:
         DOCKER_BUILDKIT: "1"
-      when: image_check.rc != 0 or (n2f_force_rebuild | bool)
+      when: image_check.rc != 0 or (rebuild_effective | bool)
       async: 7200
       poll: 60
       changed_when: true
@@ -317,15 +373,42 @@
       register: compose_up
       changed_when: "'Started' in compose_up.stderr or 'Created' in compose_up.stderr"
 
-    - name: Attendre qu'Axelor réponde (premier démarrage jusqu'à ~30 min)
-      ansible.builtin.command: docker compose exec -T app curl -fs http://localhost:8080/health
+    - name: Attendre qu'Axelor réponde réellement (premier démarrage jusqu'à ~30 min)
+      ansible.builtin.command: >-
+        docker compose exec -T app curl -sL -o /dev/null -w "%{http_code}" http://localhost:8080/
       args:
         chdir: "{{ n2f_dir }}"
       register: health
-      until: health.rc == 0
-      retries: 60
-      delay: 30
+      until: health.rc == 0 and health.stdout in ['200', '401', '403']
+      retries: 90
+      delay: 20
       changed_when: false
+
+    - name: Rôles et groupes N2F présents en base ?
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - exec
+          - -T
+          - db
+          - sh
+          - -c
+          - >-
+            psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -tA -c
+            "SELECT 'groupe:' || code FROM auth_group WHERE code IN ('N2F','role.mobile.n2f')
+            UNION ALL SELECT 'role:' || name FROM auth_role WHERE name LIKE 'n2f%'"
+      args:
+        chdir: "{{ n2f_dir }}"
+      register: n2f_check
+      changed_when: false
+      failed_when: false
+
+    - name: Résultat de la vérification
+      ansible.builtin.debug:
+        msg: >-
+          {{ n2f_check.stdout_lines if n2f_check.stdout_lines | length > 0 else
+          'Aucun groupe ni rôle N2F : installez l\'app N2F (Administration > Applications) ou définissez APP_LOAD_APPS dans .env, puis relancez.' }}
 
     # ------------------------------------------------------------------ sauvegarde
     - name: Répertoire des sauvegardes
