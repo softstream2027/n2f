@@ -64,6 +64,7 @@ services:
       PGPASSWORD: ${DB_PASSWORD:?DB_PASSWORD manquant}
       PGDATABASE: ${DB_NAME:?DB_NAME manquant}
       JAVA_XMX: ${JAVA_XMX:-4096m}
+      JAVA_OPTS: "-Daxelor.config.application.reset-password.enabled=true -Daxelor.config.application.base-url=https://${AXELOR_DOMAIN}"
       APP_MODE: prod
       APP_LANGUAGE: fr
       #APP_BASE_URL: https://${AXELOR_DOMAIN}
@@ -76,6 +77,7 @@ services:
       ADDITIONAL_PROPERTIES: "auth.local.basic-auth=indirect,direct"
       APP_DEMO_DATA: ${APP_DEMO_DATA:-false}
       APP_LOAD_APPS: ${APP_LOAD_APPS:-}
+      AXELOR_CONFIG_APPLICATION_RESET_PASSWORD_ENABLED: "true"
       # ENCRYPTION_PASSWORD: ${ENCRYPTION_PASSWORD}
     expose:
       - "8080"
