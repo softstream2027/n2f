@@ -85,7 +85,7 @@ update_properties() {
   fi
   findAndReplace "temp.dir" "{java.io.tmpdir}" ${APP_PROP_FILE_PATH}
   findAndReplace "encryption.password" "${ENCRYPTION_PASSWORD}" ${APP_PROP_FILE_PATH}
-
+  # findAndReplace "application.reset-password.enabled" "true" ${APP_PROP_FILE_PATH}
   if [ ! -z "$ADDITIONAL_PROPERTIES" ]; then
     echo "$ADDITIONAL_PROPERTIES" | while IFS='=' read -r key value; do
       findAndReplace "$key" "$value" ${APP_PROP_FILE_PATH}

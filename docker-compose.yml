@@ -64,11 +64,23 @@ services:
       PGPASSWORD: ${DB_PASSWORD:?DB_PASSWORD manquant}
       PGDATABASE: ${DB_NAME:?DB_NAME manquant}
       JAVA_XMX: ${JAVA_XMX:-4096m}
-      JAVA_OPTS: "-Daxelor.config.application.reset-password.enabled=true -Daxelor.config.application.base-url=https://${AXELOR_DOMAIN}"
+      #JAVA_OPTS: "-Daxelor.config.application.reset-password.enabled=true -Daxelor.config.application.base-url=https://${AXELOR_DOMAIN}"
+      JAVA_OPTS: "-Dmail.debug=true -Daxelor.config.application.reset-password.enabled=true -Daxelor.config.application.base-url=https://${AXELOR_DOMAIN}"
+      #AXELOR_CONFIG_MAIL_SMTP_HOST: smtp.gmail.com
+      #AXELOR_CONFIG_MAIL_SMTP_PORT: 465
+      #AXELOR_CONFIG_MAIL_SMTP_USER: ${SMTP_USER:?}
+      #AXELOR_CONFIG_MAIL_SMTP_PASS: hddenndueohdadcw
+      #AXELOR_CONFIG_MAIL_SMTP_PASSWORD: hddenndueohdadcw
+      #AXELOR_CONFIG_MAIL_SMTP_CHANNEL: ssl
+      #AXELOR_CONFIG_MAIL_SMTP_FROM: bassem.benabbes@gmail.com
+      #AXELOR_CONFIG_MAIL_FROM: bassem.benabbes@gmail.com
+      #AXELOR_CONFIG_LOGGING_LEVEL_ROOT: WARN
+      #AXELOR_CONFIG_MAIL_DEBUG: "true"
+
       APP_MODE: prod
       APP_LANGUAGE: fr
       #APP_BASE_URL: https://${AXELOR_DOMAIN}
-      # L'entrypoint met DEBUG par défaut : trop verbeux en production
+      # L'entrypoint met DEBUG par défaut : trop verbeux en production INFO
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       # Réglages via variables AXELOR_CONFIG_<clé> (documentées par Axelor, prioritaires sur le fichier).
       # L'entrypoint gère déjà db.default.ddl=update, data.upload.dir, data.export.dir, etc.
@@ -77,7 +89,7 @@ services:
       ADDITIONAL_PROPERTIES: "auth.local.basic-auth=indirect,direct"
       APP_DEMO_DATA: ${APP_DEMO_DATA:-false}
       APP_LOAD_APPS: ${APP_LOAD_APPS:-}
-      AXELOR_CONFIG_APPLICATION_RESET_PASSWORD_ENABLED: "true"
+      #AXELOR_CONFIG_APPLICATION_RESET_PASSWORD_ENABLED: "true"
       # ENCRYPTION_PASSWORD: ${ENCRYPTION_PASSWORD}
     expose:
       - "8080"
