@@ -3,9 +3,12 @@ sudo apt install -y ansible-core
 
 cd /mnt/data/n2f/ansible
 ansible-playbook -i inventory.ini install-n2f.yml -K \
-  -e n2f_run_delete_all=true -e n2f_confirm_delete=OUI
+  -e n2f_reset_all=true \
+  -e n2f_reset_saas=true \
+  -e n2f_reset_redis=true \
+  -e n2f_confirm_reset=OUI
 
-  mail axelor
+  mail axelor smtp.gmail.com
   pwd axelor
 
 cd /mnt/data 
