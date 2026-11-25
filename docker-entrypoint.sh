@@ -64,6 +64,11 @@ update_properties() {
   if [ ! -z "${APP_LOAD_APPS}" ]; then
     findAndReplace "studio.apps.install" "${APP_LOAD_APPS}" ${APP_PROP_FILE_PATH}
   fi
+
+ if [ ! -z "${APP_LOGO}" ]; then
+    findAndReplace "application.logo" "${APP_LOGO}" ${APP_PROP_FILE_PATH}
+  fi
+
   findAndReplace "application.mode" "${APP_MODE}" ${APP_PROP_FILE_PATH}
   findAndReplace "data.export.dir" "${APP_DATA_EXPORTS_DIR}" ${APP_PROP_FILE_PATH}
   findAndReplace "application.locale" "${APP_LANGUAGE}" ${APP_PROP_FILE_PATH}
