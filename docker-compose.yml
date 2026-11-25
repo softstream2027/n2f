@@ -89,7 +89,7 @@ services:
       ADDITIONAL_PROPERTIES: "auth.local.basic-auth=indirect,direct"
       APP_DEMO_DATA: ${APP_DEMO_DATA:-false}
       APP_LOAD_APPS: ${APP_LOAD_APPS:-}
-      APP_LOAD_APPS: ${APP_LOGO:-img/axelor.png}
+      APP_LOGO: ${APP_LOGO:-img/n2f.png}
       #AXELOR_CONFIG_APPLICATION_RESET_PASSWORD_ENABLED: "true"
       # ENCRYPTION_PASSWORD: ${ENCRYPTION_PASSWORD}
     expose:
