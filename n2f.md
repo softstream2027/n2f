@@ -3,6 +3,9 @@ https://github.com/axelor/axelor-docker.git
 https://github.com/axelor/open-suite-webapp/tree/v8.4.8
 https://github.com/softstream2027
 
+#Activer l'envoi des e-mails du stream=true
+com.axelor.studio.db.AppBase.activateStreamEmailSending
+
 
 reste:
 pour les 6 menue il faut les creer dasn le fichier .csv sans Parent!
@@ -125,6 +128,8 @@ docker compose up -d
 docker compose logs -f app
 docker compose logs db
 docker compose logs -f
+
+
 
 3. Planifier chaque nuit à 2h
 crontab -e
