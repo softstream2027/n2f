@@ -100,6 +100,10 @@ chmod 600 .env .env.saas
 printf ".env\n.env.saas\n" >> .gitignore
 
 # Build  v9.2.0 version
+
+docker build --no-cache  --build-arg ADDITIONAL_MODULES=""   -t n2f:1.1.0 .
+
+
 docker build \
   --build-arg ADDITIONAL_MODULES="" \
   -t n2f:1.1.0 .
