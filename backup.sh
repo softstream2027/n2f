@@ -3,6 +3,8 @@
 # Usage : ./scripts/backup.sh   (à planifier en cron, ex. 02:00 chaque nuit)
 set -euo pipefail
 #cd "$(dirname "$0")/.."
+#cd "$(dirname "$(readlink -f "$0")")"
+cd "$(dirname "$(readlink -f "$0")")"   # = /mnt/data/n2f
 
 BACKUP_DIR="${BACKUP_DIR:-/mnt/data/backups}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
