@@ -1,3 +1,7 @@
+cd /home/audaxis/Documents/axelor/Chaima
+scp -i ~/.ssh/mekkaoui.pem app-n2f.apk  ubuntu@83.228.244.59:/mnt/data/mobile-n2f
+
+
 #Axelor std v8.4.8:
 https://github.com/axelor/axelor-docker.git
 https://github.com/axelor/open-suite-webapp/tree/v8.4.8

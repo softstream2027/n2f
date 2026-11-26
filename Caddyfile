@@ -40,7 +40,19 @@
 		protocols tls1.2 tls1.3
 	}
 	import common
-	reverse_proxy frontend:3000
+
+	# Téléchargement de l'application mobile Android
+	handle_path /downloads/* {
+		root * /srv/downloads
+		header Content-Type application/vnd.android.package-archive
+		header Content-Disposition `attachment; filename="app-n2f.apk"`
+		header Cache-Control "no-cache"
+		file_server
+	}
+
+	handle {
+		reverse_proxy frontend:3000
+	}
 }
 
 # API SaaS (backend)
