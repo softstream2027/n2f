@@ -1,34 +1,53 @@
-cd /home/audaxis/Documents/axelor/Chaima
-scp -i ~/.ssh/mekkaoui.pem app-n2f.apk  ubuntu@83.228.244.59:/mnt/data/mobile-n2f
+-------------------------------------------------------------Installation a zero-----------------------------------------------------------------------------------
+ssh -i ~/.ssh/mekkaoui.pem ubuntu@83.228.244.59
+cd /mnt/data/n2f/
+ls -la
+docker compose stop
+docker compose rm
+docker compose ps
+sudo systemctl stop docker docker.socket
+sudo systemctl stop containerd
+cd /mnt/data
+ls -la
 
+sudo find . -mindepth 1 -maxdepth 1 ! -name backups -exec rm -rf {} +
 
-#Axelor std v8.4.8:
-https://github.com/axelor/axelor-docker.git
-https://github.com/axelor/open-suite-webapp/tree/v8.4.8
-https://github.com/softstream2027
+ls -la
 
-#Activer l'envoi des e-mails du stream=true
-com.axelor.studio.db.AppBase.activateStreamEmailSending
-
-
-reste:
-pour les 6 menue il faut les creer dasn le fichier .csv sans Parent!
-------------------
+https://manager.infomaniak.com/v3/2438591/ng/admin3/cloud/63038/dashboard
+n2f2026@outlook.fr
+Chaima!!!
+Réinitialiser le serveur
+Importer une clé publique
+ssh-rsa AAAAB....(/home/audaxis/Documents/axelor/Chaima/p.txt)
 
 ssh-keygen -f "/home/audaxis/.ssh/known_hosts" -R "83.228.244.59"
 ssh -i ~/.ssh/mekkaoui.pem ubuntu@83.228.244.59
 cd /mnt/data
 df -h
-sudo rm -r *
 sudo chown -R ubuntu:ubuntu /mnt/data
-
+------------------------------------------------------------------------------------------------------------------------------------------------
 # n2f
 git clone https://github.com/softstream2027/n2f.git
 cd n2f/
 ls -la
-nano .env   
+cp .env.example .env
 nano .env.saas
+---------------------------------------avec ansible---------------------------------------------------------------------------------------------------------
+sudo apt update
+sudo apt install -y ansible-core
 
+cd /mnt/data/n2f/ansible
+
+ansible-playbook -i inventory.ini install-n2f.yml -K \
+  -e n2f_reset_all=true \
+  -e n2f_reset_saas=true \
+  -e n2f_reset_redis=true \
+  -e n2f_confirm_reset=OUI
+  
+---------------------------------------sans ansible---------------------------------------------------------------------------------------------------------
+
+----------------------------------------------------------si besoin de commit--------------------------------------------------------------------------------------
 git config --global user.name "softstream2027"
 git config --global user.email "softstream2027@gmail.com"
 ssh -T git@github.com
@@ -38,7 +57,8 @@ https://github.com/settings/keys
 Ajoutez la clé publique (~/.ssh/id_ed25519.pub) sur GitHub : Settings > SSH and GPG keys > New SSH key.
 git remote set-url origin git@github.com:softstream2027/n2f.git
 ssh -T git@github.com
-
+------------------------------------------------------------------------------------------------------------------------------------------------
+cd /mnt/data
 sudo apt update
 sudo apt install docker.io -y
 sudo usermod -aG docker $USER
@@ -85,43 +105,15 @@ docker ps -a
 sudo du -sh /var/lib/containerd /mnt/data/containerd
 sudo rm -rf /var/lib/containerd
 df -h /
-------------------------------------------------------
 
 cd /mnt/data/n2f
-
-Fichier .env (dans /mnt/data/n2f/)
-
-cd /mnt/data/n2f
-
-chmod 600 .env
-echo ".env" >> .gitignore
---------------------------------
-.env.saas (toutes les autres variables du SaaS) :
- 
-
-sed -i "s|A_GENERER|$(openssl rand -hex 32)|" .env.saas
 chmod 600 .env .env.saas
-printf ".env\n.env.saas\n" >> .gitignore
-
+------------------------------------------------------
 # Build  v9.2.0 version
 
 docker build --no-cache  --build-arg ADDITIONAL_MODULES=""   -t n2f:1.1.0 .
-
-
-docker build \
-  --build-arg ADDITIONAL_MODULES="" \
-  -t n2f:1.1.0 .
-
-  /*
-# Build v8.4.8 version
-#docker build   --build-arg AOS_VERSION=v8.4.8   -t axelor/aos-ce:v8.4.8 .
-#docker build --build-arg AOS_VERSION=v8.4.8 -t n2f:v1.0.0 .
-ou bien
-docker build --no-cache \
-  --build-arg AOS_VERSION=v8.4.8 \
-  -t n2f:v1.0.0 .
-  # docker buildx build --no-cache --build-arg AOS_VERSION=v8.4.8 -t n2f:v1.0.0 --load .
-*/
+ou
+docker build  --build-arg ADDITIONAL_MODULES=""  -t n2f:1.1.0 .
 
 docker images
 sudo mkdir -p /mnt/data/axelor-data /mnt/data/postgres-data
@@ -137,7 +129,9 @@ docker compose logs -f app
 docker compose logs db
 docker compose logs -f
 
+https://saas-taysirflow.duckdns.org/
 
+------------------------------------------------------------------------------------------------------------
 
 3. Planifier chaque nuit à 2h
 crontab -e
@@ -145,6 +139,8 @@ crontab -e
 
 activer email smtp dasn axelor : Compte par défaut Compte par défaut ssl smtp.gmail.com
 https://taysirflow.duckdns.org/#/ds/mail.root.email.conf.mail.account/list/1
+
+---------------------------------------FIN Installation---------------------------------------------------------------------
 
 importer les roles dans gestion des appllications
 
@@ -485,3 +481,56 @@ n2f-app  | 2026-11-13 20:37:24.369 ERROR 7 --- [nio-8080-exec-4] o.h.engine.jdbc
 n2f-app  |   Detail: Key (code, company, type_select)=(FY2026, 2, 1) already exists.
 n2f-app  | 2026-11-13 20:37:24.385 ERROR 7 --- [nio-8080-exec-4] c.a.a.b.s.exception.TraceBackService     : org.hibernate.exception.ConstraintViolationException: could not execute statement [ERROR: duplicate key value violates unique constraint "uk_kow9mvtxabxwu64owau9r4feu"
 n2f-app  |   Detail: Key (code, company, type_select)=(FY2026, 2, 1) already exists.] [insert into base_year (archived,attrs,closure_date_time,code,company,created_by,created_on,from_date,import_id,import_origin,name,period_duration_select,process_instance_id,reported_balance_date,status_select,to_date,type_select,updated_by,updated_on,version,id) values (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)]
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+cd /home/audaxis/Documents/axelor/Chaima
+scp -i ~/.ssh/mekkaoui.pem app-n2f.apk  ubuntu@83.228.244.59:/mnt/data/mobile-n2f
+
+
+#Axelor std v8.4.8:
+https://github.com/axelor/axelor-docker.git
+https://github.com/axelor/open-suite-webapp/tree/v8.4.8
+https://github.com/softstream2027
+
+#Activer l'envoi des e-mails du stream=true
+com.axelor.studio.db.AppBase.activateStreamEmailSending
+
+
+reste:
+pour les 6 menue il faut les creer dasn le fichier .csv sans Parent!
+------------------
+
+
+  /*
+# Build v8.4.8 version
+#docker build   --build-arg AOS_VERSION=v8.4.8   -t axelor/aos-ce:v8.4.8 .
+#docker build --build-arg AOS_VERSION=v8.4.8 -t n2f:v1.0.0 .
+ou bien
+docker build --no-cache \
+  --build-arg AOS_VERSION=v8.4.8 \
+  -t n2f:v1.0.0 .
+  # docker buildx build --no-cache --build-arg AOS_VERSION=v8.4.8 -t n2f:v1.0.0 --load .
+*/
+
+
+
+
+
