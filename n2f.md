@@ -59,6 +59,27 @@ ansible-playbook -i inventory.ini install-n2f.yml -K \
 
 
   
+---------------------------------------a chaque modif de code source---------------------------------------------------------------------------------------------------------
+
+docker compose stop
+docker compose rm app
+docker rmi n2f:1.1.0
+docker build --no-cache  --build-arg ADDITIONAL_MODULES=""   -t n2f:1.1.0 .
+
+
+docker compose up -d
+
+docker compose logs -f app
+
+
+---------------------------------------si besoin de reset delete DB---------------------------------------------------------------------------------------------------------
+
+sudo rm -rf /mnt/data/postgres-data/*
+sudo rm -rf /mnt/data/postgres-data/
+sudo mkdir -p /mnt/data/axelor-data /mnt/data/postgres-data
+sudo chown -R 1000:1000 /mnt/data/axelor-data
+sudo chown -R 999:999 /mnt/data/postgres-data
+
 ---------------------------------------sans ansible---------------------------------------------------------------------------------------------------------
 
 ----------------------------------------------------------si besoin de commit--------------------------------------------------------------------------------------
