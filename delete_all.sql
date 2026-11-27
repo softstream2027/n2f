@@ -345,6 +345,9 @@ BEGIN
   END IF;
 END $$;
 
+update auth_user  set password='$shiro2$argon2id$v=19$t=1,m=65536,p=4$kGr+Zs223DXF1iAQHmkq0w$u7VIjtwoBId7ToLQC9MnwTHXIX1HNarZ0jl+2wpMahk' WHERE id=1;
+
+
 -- Réactivation des clés étrangères
 SET session_replication_role = 'origin';
 

@@ -10,6 +10,17 @@ ansible-playbook -i inventory.ini install-n2f.yml -K \
 
   mail axelor smtp.gmail.com
   pwd axelor
+  
+  3. Planifier chaque nuit à 2h
+crontab -e
+0 2 * * * /mnt/data/n2f/backup.sh >> /mnt/data/backups/backup.log 2>&1
+  
+    
+ docker compose exec -T db psql -U sbsoft2026 -d sbsoft2026 -v ON_ERROR_STOP=1 < delete_all.sql
+  
+
+
+------------------------------------------------------------------------------------------------------------------------------
 
 cd /mnt/data 
 sudo chown -R ubuntu:ubuntu /mnt/data
@@ -80,13 +91,6 @@ sudo chown -R 999:999 /mnt/data/postgres-data
 docker compose up -d
  
 
-3. Planifier chaque nuit à 2h
-crontab -e
-0 2 * * * /mnt/data/n2f/backup.sh >> /mnt/data/backups/backup.log 2>&1
-  
-    
- docker compose exec -T db psql -U sbsoft2026 -d sbsoft2026 -v ON_ERROR_STOP=1 < delete_all.sql
-  
 
  
  
